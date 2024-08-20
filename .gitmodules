@@ -1,0 +1,6 @@
+[submodule "thirdparty/libcoro"]
+	path = thirdparty/libcoro
+	url = https://github.com/jbaldwin/libcoro
+[submodule "thirdparty/spdlog"]
+	path = thirdparty/spdlog
+	url = https://github.com/gabime/spdlog
