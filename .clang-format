@@ -1,0 +1,28 @@
+---
+Language: Cpp
+BasedOnStyle: Chromium
+IndentWidth: 4
+AccessModifierOffset: -4
+SpaceAfterTemplateKeyword: false
+AlignEscapedNewlines: Left
+AlignTrailingComments: true
+BreakBeforeInheritanceComma: true
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+IndentPPDirectives: AfterHash
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: false
+NamespaceIndentation: None
+ColumnLimit: 180
+PointerAlignment: Left
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLambdasOnASingleLine: All
+AllowShortFunctionsOnASingleLine: All
+ContinuationIndentWidth: 2
+AlignOperands: AlignAfterOperator
+AlignAfterOpenBracket: BlockIndent
+RequiresClausePosition: OwnLine
+#RequiresExpressionIndentation: OuterScope
+

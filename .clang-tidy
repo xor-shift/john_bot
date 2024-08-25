@@ -1,0 +1,53 @@
+Checks: >
+  -*,
+  #bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  concurrency-*,
+  misc-*,
+  performance-*,
+  portability-*,
+  bugprone-macro-parentheses,
+  bugprone-reserved-identifier,-cert-dcl37-c,-cert-dcl51-cpp,
+  cert-dcl21-cpp,
+  misc-non-private-member-variables-in-classes,
+
+  performance-move-const-arg
+  performance-noexcept-move-constructor,
+  performance-no-int-to-ptr,
+
+  readability-braces-around-statements,
+  readability-identifier-length,
+  readability-named-parameter,
+  readability-qualified-auto,
+
+  modernize-avoid-bind,
+  modernize-concat-nested-namespaces,
+  modernize-deprecated-headers
+  modernize-loop-convert,
+  modernize-make-shared,
+  modernize-make-unique,
+  modernize-return-braced-init-list,
+  modernize-unary-static-assert,
+  modernize-use-auto,
+  modernize-use-emplace,
+  modernize-use-trailing-return-type,
+  modernize-use-transparent-functors,
+
+  modernize-pass-by-value,
+
+  -readability-uppercase-literal-suffix,
+  -readability-identifier-length,
+
+CheckOptions:
+  - key: modernize-use-auto.RemoveStars,
+    value: 0
+  - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value: 1
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 100
+  - key: performance-move-const-arg.CheckTriviallyCopyableMove
+    value: 0
+
+WarningsAsErrors: ''
+

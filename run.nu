@@ -77,7 +77,7 @@ def main [...args: string] {
         "test" => {
             if ("run/test" | path exists) == false { mkdir "run/test"; }
             cd run/test;
-            run-external $"../../($build_dir)/john_bot_tests";
+            run-external $"../../($build_dir)/john_bot_test";
             cd ..;
         },
         _ => {

@@ -1,0 +1,9 @@
+CompileFlags:
+  Add: [
+    -stdlib=libc++,
+    -isystem,
+    /nix/store/bl0z213z1rvc2n5nhdqyvi8yj7s3lpdf-libcxx-18.1.8-dev/include/c++/v1,
+    -isystem,
+    /nix/store/1vp54ln0frvhzgasr2a377mfbwvqdm6i-glibc-2.39-52-dev/include,
+  ]
+
