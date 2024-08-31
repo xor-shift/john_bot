@@ -3,7 +3,13 @@
 #include <expected>
 #include <type_traits>
 
-#include <boost/asio.hpp>
+#include <boost/asio/associated_executor.hpp>
+#include <boost/asio/associator.hpp>
+#include <boost/asio/async_result.hpp>
+#include <boost/asio/detail/handler_cont_helpers.hpp>
+#include <boost/asio/detail/initiation_base.hpp>
+#include <boost/asio/use_awaitable.hpp>
+#include <boost/system/error_code.hpp>
 
 using boost::asio::constraint_t;
 using std::conditional_t;
@@ -12,7 +18,7 @@ using std::false_type;
 using std::is_convertible;
 using std::is_same;
 
-namespace john {
+namespace john::assio {
 
 template<typename CompletionToken>
 class as_expected_t {
@@ -59,9 +65,18 @@ struct partial_as_expected {
 
 inline constexpr partial_as_expected as_expected;
 
-}  // namespace john
+using default_token = as_expected_t<boost::asio::use_awaitable_t<>>;
 
-namespace john::detail {
+}  // namespace john::assio
+
+namespace john {
+
+template<typename T>
+using assify = assio::as_expected_t<boost::asio::use_awaitable_t<>>::as_default_on_t<T>;
+
+}
+
+namespace john::assio::detail {
 
 template<typename... Ts>
 struct expected_type : std::type_identity<std::expected<std::tuple<std::decay_t<Ts>...>, boost::system::error_code>> {};
@@ -139,23 +154,23 @@ struct as_expected_signature<R(boost::system::error_code, Args...) && noexcept> 
     typedef R type(expected_type_t<Args...>) && noexcept;
 };
 
-}  // namespace john::detail
+}  // namespace john::assio::detail
 
 template<typename CompletionToken, typename... Signatures>
-struct boost::asio::async_result<john::as_expected_t<CompletionToken>, Signatures...>
-    : async_result<CompletionToken, typename john::detail::as_expected_signature<Signatures>::type...> {
+struct boost::asio::async_result<john::assio::as_expected_t<CompletionToken>, Signatures...>
+    : async_result<CompletionToken, typename john::assio::detail::as_expected_signature<Signatures>::type...> {
     template<typename Initiation>
     struct init_wrapper : detail::initiation_base<Initiation> {
         using detail::initiation_base<Initiation>::initiation_base;
 
         template<typename Handler, typename... Args>
         void operator()(Handler&& handler, Args&&... args) && {
-            static_cast<Initiation&&>(*this)(john::detail::as_expected_handler<decay_t<Handler>>(static_cast<Handler&&>(handler)), static_cast<Args&&>(args)...);
+            static_cast<Initiation&&>(*this)(john::assio::detail::as_expected_handler<decay_t<Handler>>(static_cast<Handler&&>(handler)), static_cast<Args&&>(args)...);
         }
 
         template<typename Handler, typename... Args>
         void operator()(Handler&& handler, Args&&... args) const& {
-            static_cast<const Initiation&>(*this)(john::detail::as_expected_handler<decay_t<Handler>>(static_cast<Handler&&>(handler)), static_cast<Args&&>(args)...);
+            static_cast<const Initiation&>(*this)(john::assio::detail::as_expected_handler<decay_t<Handler>>(static_cast<Handler&&>(handler)), static_cast<Args&&>(args)...);
         }
     };
 
@@ -163,41 +178,42 @@ struct boost::asio::async_result<john::as_expected_t<CompletionToken>, Signature
     static auto initiate(Initiation&& initiation, RawCompletionToken&& token, Args&&... args)
       -> decltype(async_initiate<
                   conditional_t<is_const<remove_reference_t<RawCompletionToken>>::value, const CompletionToken, CompletionToken>,
-                  typename john::detail::as_expected_signature<Signatures>::type...>(
+                  typename john::assio::detail::as_expected_signature<Signatures>::type...>(
         init_wrapper<decay_t<Initiation>>(static_cast<Initiation&&>(initiation)),
         token.m_token,
         static_cast<Args&&>(args)...
       )) {
         return async_initiate<
           conditional_t<is_const<remove_reference_t<RawCompletionToken>>::value, const CompletionToken, CompletionToken>,
-          typename john::detail::as_expected_signature<Signatures>::type...>(
+          typename john::assio::detail::as_expected_signature<Signatures>::type...>(
           init_wrapper<decay_t<Initiation>>(static_cast<Initiation&&>(initiation)), token.m_token, static_cast<Args&&>(args)...
         );
     }
 };
 
 template<template<typename, typename> class Associator, typename Handler, typename DefaultCandidate>
-struct boost::asio::associator<Associator, john::detail::as_expected_handler<Handler>, DefaultCandidate> : Associator<Handler, DefaultCandidate> {
-    static auto get(const john::detail::as_expected_handler<Handler>& h) noexcept -> typename Associator<Handler, DefaultCandidate>::type {
+struct boost::asio::associator<Associator, john::assio::detail::as_expected_handler<Handler>, DefaultCandidate> : Associator<Handler, DefaultCandidate> {
+    static auto get(const john::assio::detail::as_expected_handler<Handler>& h) noexcept -> typename Associator<Handler, DefaultCandidate>::type {
         return Associator<Handler, DefaultCandidate>::get(h.m_handler);
     }
 
-    static auto get(const john::detail::as_expected_handler<Handler>& h, const DefaultCandidate& c) noexcept -> decltype(Associator<Handler, DefaultCandidate>::get(h.m_handler, c)
-                                                                                                             ) {
+    static auto get(const john::assio::detail::as_expected_handler<Handler>& h, const DefaultCandidate& c) noexcept
+      -> decltype(Associator<Handler, DefaultCandidate>::get(h.m_handler, c)) {
         return Associator<Handler, DefaultCandidate>::get(h.m_handler, c);
     }
 };
 
 template<typename... Signatures>
-struct boost::asio::async_result<john::partial_as_expected, Signatures...> {
+struct boost::asio::async_result<john::assio::partial_as_expected, Signatures...> {
     template<typename Initiation, typename RawCompletionToken, typename... Args>
     static auto initiate(Initiation&& initiation, RawCompletionToken&&, Args&&... args) -> decltype(async_initiate<Signatures...>(
                                                                                           static_cast<Initiation&&>(initiation),
-                                                                                          john::as_expected_t<default_completion_token_t<associated_executor_t<Initiation>>>{},
+                                                                                          john::assio::as_expected_t<default_completion_token_t<associated_executor_t<Initiation>>>{
+                                                                                          },
                                                                                           static_cast<Args&&>(args)...
                                                                                         )) {
         return async_initiate<Signatures...>(
-          static_cast<Initiation&&>(initiation), john::as_expected_t<default_completion_token_t<associated_executor_t<Initiation>>>{}, static_cast<Args&&>(args)...
+          static_cast<Initiation&&>(initiation), john::assio::as_expected_t<default_completion_token_t<associated_executor_t<Initiation>>>{}, static_cast<Args&&>(args)...
         );
     }
 };

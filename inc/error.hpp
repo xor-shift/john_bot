@@ -28,6 +28,10 @@ private:
 
 }  // namespace john
 
+namespace boost::system {
+class error_code;
+}
+
 namespace anyhow {
 
 struct string_error final : john::error {
@@ -58,13 +62,19 @@ struct error final : john::error {
     error(std::string_view message)
         : error(string_error(std::string{message})) {}
 
+    template<typename T>
+        requires std::is_same_v<T, boost::system::error_code> &&  // make sure that we have to instantiate the tempalte
+                 std::is_object_v<T>                              // make sure that the type is defined
+    error(T ec)
+        : error(string_error(ec.what())) {}
+
     error(error const& other)
         : m_deleter(other.m_deleter)
         , m_copier(other.m_copier)
         , m_original(m_copier(other.m_original)) {}
 
     error(error&& other) noexcept
-        : m_deleter(other.m_deleter) 
+        : m_deleter(other.m_deleter)
         , m_original(other.m_original) {
         other.m_original = nullptr;
     }
@@ -88,7 +98,7 @@ private:
     john::error* (*m_copier)(john::error*) = nullptr;
 
     john::error* m_original = nullptr;
-    
+
     template<typename T, typename U = std::remove_cvref_t<T>>
     static void delete_t(john::error* error) {
         delete reinterpret_cast<U*>(error);
@@ -109,3 +119,6 @@ using result = std::expected<T, error>;
 
 #define _anyhow(message) \
     std::unexpected { ::anyhow::error(::anyhow::string_error(std::string(message))) }
+
+#define _anyhow_fmt(_format, ...) \
+    std::unexpected { ::anyhow::error(::anyhow::string_error(fmt::format(_format, __VA_ARGS__))) }

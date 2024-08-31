@@ -30,6 +30,9 @@ void assert_valid_message(std::string_view chars, message_view expected) {
 }
 
 TEST(message, message) {
+    using john::irc::numeric_reply;
+    using john::irc::reply;
+
     assert_valid_message(
       "NICK amy\r\n",
       {
@@ -51,7 +54,7 @@ TEST(message, message) {
       ":bar.example.com 001 amy :Welcome to the blah blah\r\n",
       {
         .m_prefix_name = "bar.example.com",
-        .m_command = "001",
+        .m_command = 1,
         .m_params = "  amy ",
         .m_trailing = "Welcome to the blah blah",
       }
@@ -61,7 +64,7 @@ TEST(message, message) {
       ":bar.example.com 433 * amy :Nickname is already in use.\r\n",
       {
         .m_prefix_name = "bar.example.com",
-        .m_command = "433",
+        .m_command = numeric_reply::ERR_NICKNAMEINUSE,
         .m_params = "*  amy ",
         .m_trailing = "Nickname is already in use.",
       }
