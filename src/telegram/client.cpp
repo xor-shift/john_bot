@@ -1,7 +1,6 @@
 #include <telegram/client.hpp>
 
-#include <common.hpp>
-#include <try.hpp>
+#include <stuff/core/try.hpp>
 
 #include <spdlog/spdlog.h>
 

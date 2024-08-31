@@ -3,7 +3,7 @@
 #include <memory_resource>
 #include <type_traits>
 
-#include <common.hpp>
+#include <stuff/core/integers.hpp>
 
 namespace john {
 

@@ -1,5 +1,7 @@
 #include <irc/client.hpp>
 
+#include <stuff/core/visitor.hpp>
+
 #include <spdlog/spdlog.h>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/deadline_timer.hpp>
@@ -61,7 +63,7 @@ auto irc_client::worker(bot& bot) -> asio::awaitable<void> {
 }
 
 auto irc_client::handle(internal_message const& message) -> boost::asio::awaitable<void> {
-    const auto visitor = multi_visitor{
+    const auto visitor = stf::multi_visitor{
       [&](john::outgoing_message const& message) -> boost::asio::awaitable<void> {
           if (message.m_target["ident"] != g_config.m_identifier) {
               co_return;
@@ -133,7 +135,7 @@ auto irc_client::message_handler(message_view const& message) -> asio::awaitable
 
     const auto params = std::vector(std::from_range, message.params());
 
-    const auto state_visitor = multi_visitor{
+    const auto state_visitor = stf::multi_visitor{
       [&](state::connected) -> asio::awaitable<void> {
           if (message.m_command == reply{001}) {
               co_await state_change(state::registered{});
@@ -188,7 +190,7 @@ auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
 
     auto try_register_n = [&](usize n) { return try_register(g_config.m_nicks[n], g_config.m_user, g_config.m_realname); };
 
-    const auto state_visitor = multi_visitor{
+    const auto state_visitor = stf::multi_visitor{
       [&](state::connected& state) -> asio::awaitable<void> {
           if (state.m_nick_try >= g_config.m_nicks.size()) {
               spdlog::error("ran out of nicks to try, oh well!");

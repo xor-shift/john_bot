@@ -1,11 +1,13 @@
 #include <irc/client.hpp>
-#include <telegram/client.hpp>
 
 #include <alloc.hpp>
 #include <assio/as_expected.hpp>
-#include <common.hpp>
 #include <error.hpp>
-#include <try.hpp>
+#include <telegram/client.hpp>
+
+#include <stuff/core/integers.hpp>
+#include <stuff/core/try.hpp>
+#include <stuff/core/visitor.hpp>
 
 #include <spdlog/spdlog.h>
 #include <magic_enum.hpp>
@@ -21,7 +23,7 @@ struct echoer final : john::thing {
     }
 
     auto handle(john::internal_message const& message) -> boost::asio::awaitable<void> override {
-        const auto visitor = multi_visitor{
+        const auto visitor = stf::multi_visitor{
           [&](john::incoming_message const& message) -> boost::asio::awaitable<void> {
               co_await m_bot->new_message(john::outgoing_message{
                 .m_target = message.m_return_to_sender,

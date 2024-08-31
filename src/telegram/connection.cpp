@@ -1,7 +1,8 @@
 #include <telegram/connection.hpp>
 
 #include <assio/as_expected.hpp>
-#include <try.hpp>
+
+#include <stuff/core/try.hpp>
 
 #include <spdlog/spdlog.h>
 #include <boost/asio/ssl/stream.hpp>

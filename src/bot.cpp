@@ -1,5 +1,7 @@
 #include <bot.hpp>
 
+#include <stuff/core/visitor.hpp>
+
 #include <spdlog/spdlog.h>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
@@ -40,7 +42,7 @@ auto bot::run() -> boost::asio::awaitable<anyhow::result<void>> {
 
 auto bot::new_message(internal_message message) -> boost::asio::awaitable<void> {
     spdlog::debug("new internal message");
-    const auto visitor = multi_visitor{
+    const auto visitor = stf::multi_visitor{
       [&](john::incoming_message const& message) -> boost::asio::awaitable<void> {
           spdlog::debug("new message:");
           print_message(message);

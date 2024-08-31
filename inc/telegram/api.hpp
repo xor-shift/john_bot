@@ -1,6 +1,7 @@
 #pragma once
 
-#include <common.hpp>
+#include <stuff/core/integers.hpp>
+
 #include <error.hpp>
 #include <telegram/connection.hpp>
 

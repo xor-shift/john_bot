@@ -1,10 +1,10 @@
 #pragma once
 
+#include <stuff/core/integers.hpp>
+
 #include <memory>
 #include <ranges>
 #include <string_view>
-
-#include <common.hpp>
 
 namespace john {
 

@@ -26,7 +26,6 @@ add_subdirectory(thirdparty/stuff)
 # everything besides main.cpp
 add_library(${PROJECT_NAME}_lib
     inc/error.hpp
-    inc/try.hpp
 
     src/bot.cpp
     src/irc/replies.cpp

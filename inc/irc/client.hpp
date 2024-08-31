@@ -1,10 +1,9 @@
 #pragma once
 
 #include <alloc.hpp>
-#include <bot.hpp>
-#include <common.hpp>
-#include <irc/message.hpp>
 #include <assio/as_expected.hpp>
+#include <bot.hpp>
+#include <irc/message.hpp>
 
 #include <boost/asio/ip/tcp.hpp>
 

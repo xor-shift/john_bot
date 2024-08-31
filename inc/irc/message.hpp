@@ -2,7 +2,7 @@
 
 #include <error.hpp>
 #include <irc/replies.hpp>
-#include <try.hpp>
+#include <stuff/core/try.hpp>
 
 #include <ranges>
 
