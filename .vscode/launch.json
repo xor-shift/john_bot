@@ -1,0 +1,11 @@
+{
+   "configurations": [
+       {
+           "type": "lldb",
+           "request": "launch",
+           "name": "debug",
+           "program": "${workspaceFolder}/build/debug-clang/john_bot",
+           "cwd": "${workspaceFolder}/run/main"
+       }
+   ]
+}

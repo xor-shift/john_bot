@@ -76,6 +76,13 @@ struct basic_mini_kv {
     using mapped_type = std::string_view;
     using value_type = std::pair<key_type, mapped_type>;
 
+    constexpr basic_mini_kv(std::initializer_list<std::pair<std::string_view, std::string_view>> il, Allocator allocator = {})
+        : basic_mini_kv(allocator) {
+        for (auto const& [k, v] : il) {
+            push_back(k, v);
+        }
+    }
+
     constexpr basic_mini_kv(Allocator allocator = {})
         : m_data(allocator) {}
 

@@ -50,21 +50,54 @@ struct connection_impl {
         co_return anyhow::result<void>{};
     }
 
-    auto make_request(std::string_view endpoint, json::object const& body = {}, http::verb method = http::verb::get) -> awaitable<anyhow::result<boost::json::value>> {
+    auto make_request(std::string_view endpoint, http::verb method = http::verb::get) -> awaitable<anyhow::result<boost::json::value>> {
+        return make_request_impl(endpoint, "", method);
+    }
+
+    auto make_request(std::string_view endpoint, json::object const& body, http::verb method = http::verb::get) -> awaitable<anyhow::result<boost::json::value>> {
+        return make_request_impl(endpoint, serialize(body), method);
+    }
+
+private:
+    connection_impl(asio::any_io_executor& executor, configuration config)
+        : m_executor(executor)
+        , m_ssl_context(ssl::context::sslv23)
+        , m_stream(executor, m_ssl_context)
+        , m_config(std::move(config)) {}
+
+    auto make_request_impl(std::string_view endpoint, std::string body, http::verb method = http::verb::get) -> awaitable<anyhow::result<boost::json::value>> {
         auto req = http::request<http::string_body>{method, fmt::format("/bot{}/{}", m_config.m_token, endpoint), 11};
         req.set(http::field::host, m_config.m_host);
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
         req.set(http::field::content_type, "application/json");
-        req.set(http::field::accept, "application/json");
-        req.body() = serialize(body);
+
+        if (!body.empty()) {
+            req.set(http::field::accept, "application/json");
+            req.body() = std::move(body);
+        }
+
+        req.prepare_payload(); // lol
+
         TRYC((co_await http::async_write(m_stream, req)));
 
         auto buffer = beast::flat_buffer{};
         auto response = http::response<http::dynamic_body>{};
         TRYC((co_await http::async_read(m_stream, buffer, response)));
 
+        /*{
+            spdlog::trace("{}", (std::stringstream{} << req).str());
+            spdlog::trace("{}", (std::stringstream{} << response).str());
+        }*/
+
         if (response.result_int() != 200) {
-            co_return _anyhow_fmt("call to /{} returned {} (expected 200)", endpoint, response.result_int());
+            auto body = std::string {};
+
+            for (auto i = 0uz; auto const& buffer : response.body().data()) {
+                auto data = std::string_view(boost::asio::buffer_cast<const char*>(buffer), buffer.size());
+                std::ranges::copy(data, back_inserter(body));
+            }
+
+            co_return _anyhow_fmt("call to /{} returned {} (expected 200). body: {}", endpoint, response.result_int(), body);
         }
 
         auto parser = json::stream_parser{};
@@ -86,13 +119,6 @@ struct connection_impl {
 
         co_return json_value;
     }
-
-private:
-    connection_impl(asio::any_io_executor& executor, configuration config)
-        : m_executor(executor)
-        , m_ssl_context(ssl::context::sslv23)
-        , m_stream(executor, m_ssl_context)
-        , m_config(std::move(config)) {}
 };
 
 }  // namespace detail
@@ -104,8 +130,19 @@ connection::~connection() = default;
 
 auto connection::init_or_reinit() -> boost::asio::awaitable<anyhow::result<void>> { return m_impl->init_or_reinit(); }
 
+auto connection::make_request(std::string_view endpoint, request_verb verb) -> boost::asio::awaitable<anyhow::result<boost::json::value>> {
+    auto real_verb = http::verb{};
+
+    switch (verb) {
+        case request_verb::get: real_verb = http::verb::get;
+        case request_verb::post: real_verb = http::verb::post;
+    }
+
+    return m_impl->make_request(endpoint, real_verb);
+}
+
 auto connection::make_request(std::string_view endpoint, boost::json::object const& body, request_verb verb) -> boost::asio::awaitable<anyhow::result<boost::json::value>> {
-    auto real_verb = http::verb {};
+    auto real_verb = http::verb{};
 
     switch (verb) {
         case request_verb::get: real_verb = http::verb::get;

@@ -75,6 +75,7 @@ struct error final : john::error {
 
     error(error&& other) noexcept
         : m_deleter(other.m_deleter)
+        , m_copier(other.m_copier)
         , m_original(other.m_original) {
         other.m_original = nullptr;
     }
@@ -122,3 +123,22 @@ using result = std::expected<T, error>;
 
 #define _anyhow_fmt(_format, ...) \
     std::unexpected { ::anyhow::error(::anyhow::string_error(fmt::format(_format, __VA_ARGS__))) }
+
+template<>
+struct fmt::formatter<john::error> {
+    constexpr auto parse(fmt::format_parse_context& ctx) -> fmt::format_parse_context::iterator { return ctx.begin(); }
+
+    auto format(john::error const& error, fmt::format_context& ctx) -> fmt::format_context::iterator {
+        auto it = ctx.out();
+
+        it = fmt::format_to(it, "error with description: {}", error.description());
+
+        const auto* cause = error.source();
+        while (cause != nullptr) {
+            it = fmt::format_to(it, "\ncaused by error: {}", cause->description());
+            cause = cause->source();
+        }
+
+        return it;
+    }
+};

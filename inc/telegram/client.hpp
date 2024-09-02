@@ -7,6 +7,7 @@
 namespace john::telegram {
 
 inline static configuration g_configuration = {
+    .m_id = "telegram_yui",
     .m_token = "OMITTED",
     .m_host = "api.telegram.org",
 };

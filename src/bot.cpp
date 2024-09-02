@@ -55,7 +55,8 @@ auto bot::new_message(internal_message message) -> boost::asio::awaitable<void> 
     co_await std::visit(visitor, message);
 
     for (auto& thing : m_things) {
-        asio::co_spawn(co_await asio::this_coro::executor, thing->handle(message), asio::detached);
+        //asio::co_spawn(co_await asio::this_coro::executor, thing->handle(message), asio::detached);
+        co_await thing->handle(message);
     }
 
     co_return;

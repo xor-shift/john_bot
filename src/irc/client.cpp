@@ -73,14 +73,14 @@ auto irc_client::handle(internal_message const& message) -> boost::asio::awaitab
 
           co_await send_message(message::bare("PRIVMSG").with_param(std::string(target)).with_trailing(message.m_content));
 
-          co_return;  //
+          co_return;
       },
       [](auto const&) -> boost::asio::awaitable<void> { co_return; }
     };
 
     co_await std::visit(visitor, message);
 
-    co_return;  //
+    co_return;
 }
 
 auto irc_client::run_inner() -> asio::awaitable<std::expected<void, boost::system::error_code>> {
