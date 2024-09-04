@@ -27,6 +27,7 @@ add_subdirectory(thirdparty/stuff)
 add_library(${PROJECT_NAME}_lib
     inc/error.hpp
 
+    src/boost_mysql.cpp
     src/bot.cpp
     src/irc/replies.cpp
     src/irc/client.cpp
@@ -48,6 +49,7 @@ target_link_libraries(${PROJECT_NAME}_lib PUBLIC
     Boost::asio
     Boost::beast
     Boost::json
+    Boost::mysql
 
     stf::intro
 )
@@ -56,6 +58,7 @@ target_include_directories(${PROJECT_NAME}_lib PUBLIC
     inc
 )
 
+target_compile_definitions(${PROJECT_NAME}_lib PUBLIC BOOST_MYSQL_SEPARATE_COMPILATION)
 
 add_executable(${PROJECT_NAME} main.cpp)
 target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=address -fsanitize=undefined)

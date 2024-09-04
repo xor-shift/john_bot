@@ -25,7 +25,7 @@ auto client::worker(bot& bot) -> asio::awaitable<void> {
 auto client::handle(internal_message const& message) -> boost::asio::awaitable<void> {
     const auto visitor = stf::multi_visitor{
       [&](john::outgoing_message const& message) -> boost::asio::awaitable<void> {
-          if (message.m_target["ident"] != g_configuration.m_id) {
+          if (message.m_target["ident"] != m_config.m_identifier) {
               co_return;
           }
 
@@ -66,10 +66,14 @@ auto client::worker_inner(bot& bot) -> boost::asio::awaitable<anyhow::result<voi
         spdlog::error("failed to initialize a connection to telegram: {}", static_cast<error const&>(res.error()));
     }
 
+    if (auto res = co_await m_update_connection.init_or_reinit(); !res) {
+        spdlog::error("failed to initialize the update connection to telegram: {}", static_cast<error const&>(res.error()));
+    }
+
     auto highest_id = (u64)0;
 
     for (;;) {
-        const auto poll_result = TRYC(co_await api::get_updates(m_connection, api::types::update_type::message | api::types::update_type::edited_message, 60, highest_id + 1));
+        const auto poll_result = TRYC(co_await api::get_updates(m_update_connection, api::types::update_type::message | api::types::update_type::edited_message, 60, highest_id + 1));
 
         if (poll_result.empty()) {
             spdlog::debug("received an empty update, re-polling");
@@ -96,9 +100,9 @@ auto client::worker_inner(bot& bot) -> boost::asio::awaitable<anyhow::result<voi
               }
 
               co_await bot.new_message(incoming_message{
-                .m_thing_id = g_configuration.m_id,
-                .m_sender_identifier = {{"ident", g_configuration.m_id}, {"id", std::to_string(message.m_from->m_id)}},
-                .m_return_to_sender = {{"ident", g_configuration.m_id}, {"id", std::to_string(message.m_chat->m_id)}},
+                .m_thing_id = m_config.m_identifier,
+                .m_sender_identifier = {{"ident", m_config.m_identifier}, {"id", std::to_string(message.m_from->m_id)}},
+                .m_return_to_sender = {{"ident", m_config.m_identifier}, {"id", std::to_string(message.m_chat->m_id)}},
                 .m_content = message.m_text.value_or(""),
               });
 

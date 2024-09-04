@@ -9,7 +9,7 @@
 namespace john::telegram {
 
 struct configuration {
-    std::string m_id;
+    std::string m_identifier;
     std::string m_token;
     std::string m_host;
 };

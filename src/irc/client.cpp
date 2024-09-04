@@ -36,14 +36,6 @@ static void print_irc_message(message_view const& message) {
     print_optional("trailing", message.m_trailing);
 }
 
-inline static const auto g_config = configuration{
-  .m_identifier = "irc_retardnet_bohnjot",
-  .m_nicks{"BohnJot"},
-  .m_user = "BohnJot",
-  .m_realname = "Bohn Jot",
-  .m_channels = {"#test"},
-};
-
 auto irc_client::worker(bot& bot) -> asio::awaitable<void> {
     m_bot = &bot;
     for (auto try_no = 1uz;; try_no++) {
@@ -65,7 +57,7 @@ auto irc_client::worker(bot& bot) -> asio::awaitable<void> {
 auto irc_client::handle(internal_message const& message) -> boost::asio::awaitable<void> {
     const auto visitor = stf::multi_visitor{
       [&](john::outgoing_message const& message) -> boost::asio::awaitable<void> {
-          if (message.m_target["ident"] != g_config.m_identifier) {
+          if (message.m_target["ident"] != m_config.m_identifier) {
               co_return;
           }
 
@@ -152,16 +144,16 @@ auto irc_client::message_handler(message_view const& message) -> asio::awaitable
               const auto is_private_message = params[0] == state.m_nick;
 
               auto internal_msg = incoming_message{
-                .m_thing_id = g_config.m_identifier,
+                .m_thing_id = m_config.m_identifier,
                 .m_sender_identifier = {},
                 .m_return_to_sender = {},
                 .m_content = std::string{message.m_trailing.value_or(std::string_view{})},
               };
 
-              internal_msg.m_sender_identifier.push_back("ident", g_config.m_identifier);
+              internal_msg.m_sender_identifier.push_back("ident", m_config.m_identifier);
               internal_msg.m_sender_identifier.push_back("nick", message.m_prefix_name.value_or(""));
 
-              internal_msg.m_return_to_sender.push_back("ident", g_config.m_identifier);
+              internal_msg.m_return_to_sender.push_back("ident", m_config.m_identifier);
               internal_msg.m_return_to_sender.push_back("target", is_private_message ? message.m_prefix_name.value_or("") : params[0]);
 
               co_await m_bot->new_message(std::move(internal_msg));
@@ -182,17 +174,17 @@ auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
     auto try_register = [&](std::string_view nick, std::string_view user, std::string_view realname) -> asio::awaitable<void> {
         co_await send_message(message::bare("NICK").with_param(std::string(nick)));
         co_await send_message(message::bare("USER")  //
-                                .with_param(g_config.m_user)
+                                .with_param(m_config.m_user)
                                 .with_param("*")
                                 .with_param("*")
-                                .with_trailing(g_config.m_realname));
+                                .with_trailing(m_config.m_realname));
     };
 
-    auto try_register_n = [&](usize n) { return try_register(g_config.m_nicks[n], g_config.m_user, g_config.m_realname); };
+    auto try_register_n = [&](usize n) { return try_register(m_config.m_nicks[n], m_config.m_user, m_config.m_realname); };
 
     const auto state_visitor = stf::multi_visitor{
       [&](state::connected& state) -> asio::awaitable<void> {
-          if (state.m_nick_try >= g_config.m_nicks.size()) {
+          if (state.m_nick_try >= m_config.m_nicks.size()) {
               spdlog::error("ran out of nicks to try, oh well!");
               co_await state_change(state::failure_registration{});
           }
@@ -207,11 +199,11 @@ auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
           }
 
           auto prev_state = std::get<state::connected>(old_state);
-          state.m_nick = g_config.m_nicks[prev_state.m_nick_try];
+          state.m_nick = m_config.m_nicks[prev_state.m_nick_try];
 
           spdlog::debug("registered with nick {}", state.m_nick);
 
-          for (auto const& chan : g_config.m_channels) {
+          for (auto const& chan : m_config.m_channels) {
               co_await send_message(irc::message::bare("JOIN").with_param(chan));
           }
           co_return;
@@ -226,13 +218,13 @@ auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
           }
 
           auto prev_state = std::get<state::connected>(old_state);
-          if (prev_state.m_nick_try >= g_config.m_nicks.size()) {
+          if (prev_state.m_nick_try >= m_config.m_nicks.size()) {
               spdlog::error("not going to try anymore to register");
           }
 
           prev_state.m_nick_try++;
 
-          spdlog::error("registration with the nick \"{}\" failed, going to try \"{}\"", g_config.m_nicks[prev_state.m_nick_try - 1], g_config.m_nicks[prev_state.m_nick_try]);
+          spdlog::error("registration with the nick \"{}\" failed, going to try \"{}\"", m_config.m_nicks[prev_state.m_nick_try - 1], m_config.m_nicks[prev_state.m_nick_try]);
 
           co_await state_change(prev_state);
 

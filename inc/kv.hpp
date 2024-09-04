@@ -83,6 +83,14 @@ struct basic_mini_kv {
         }
     }
 
+    template<typename Range>
+    constexpr basic_mini_kv(std::from_range_t, Range&& range, Allocator allocator = {})
+        : basic_mini_kv(allocator) {
+        for (auto const& [k, v] : range) {
+            push_back(k, v);
+        }
+    }
+
     constexpr basic_mini_kv(Allocator allocator = {})
         : m_data(allocator) {}
 
@@ -128,7 +136,18 @@ struct basic_mini_kv {
     }
 
     // complexity: linear
-    constexpr auto contains(std::string_view key) -> bool { return (*this)[key]; }
+    constexpr auto contains(std::string_view key) const -> bool { return (*this)[key]; }
+
+    // complexity: quadratic
+    constexpr auto strongly_equals(basic_mini_kv const& other) const -> bool {
+        for (auto const& [k, v] : *this) {
+            if (auto v_other = other[k]; !v_other || *v_other != v) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
 private:
     usize m_size_cache = 0;

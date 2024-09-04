@@ -6,16 +6,12 @@
 
 namespace john::telegram {
 
-inline static configuration g_configuration = {
-    .m_id = "telegram_yui",
-    .m_token = "OMITTED",
-    .m_host = "api.telegram.org",
-};
-
 struct client final : thing {
-    client(boost::asio::any_io_executor& executor)
+    client(boost::asio::any_io_executor& executor, configuration const& config)
         : m_executor(executor)
-        , m_connection(executor, g_configuration) {}
+        , m_connection(executor, config)
+        , m_update_connection(executor, config)
+        , m_config(config) {}
 
     client(client const&) = delete;
     client(client&&) = delete;
@@ -27,6 +23,9 @@ struct client final : thing {
 private:
     boost::asio::any_io_executor& m_executor;
     connection m_connection;
+    connection m_update_connection;
+
+    configuration m_config;
 
     auto worker_inner(bot& bot) -> boost::asio::awaitable<anyhow::result<void>>;
 };

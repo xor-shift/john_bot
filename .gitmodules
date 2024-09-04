@@ -16,3 +16,6 @@
 [submodule "thirdparty/stuff"]
 	path = thirdparty/stuff
 	url = https://github.com/xor-shift/stuff
+[submodule "thirdparty/sqlite"]
+	path = thirdparty/sqlite
+	url = https://github.com/sqlite/sqlite

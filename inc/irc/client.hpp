@@ -38,11 +38,12 @@ struct failure_registration {};
 using state_t = std::variant<state::disconnected, state::connected, state::registered, state::failure_connection, state::failure_registration>;
 
 struct irc_client final : thing {
-    irc_client(boost::asio::any_io_executor& executor, usize max_message_length = 512, std::pmr::memory_resource* resource = std::pmr::get_default_resource())
+    irc_client(boost::asio::any_io_executor& executor, configuration config, usize max_message_length = 512, std::pmr::memory_resource* resource = std::pmr::get_default_resource())
         : m_executor(executor)
         , m_resource(resource)
         , m_incoming_buffer(john::create_n<char>(resource, max_message_length), max_message_length)
-        , m_socket(m_executor) {}
+        , m_socket(m_executor)
+        , m_config(std::move(config)) {}
 
     ~irc_client() {
         john::destroy(m_resource, m_incoming_buffer.data(), m_incoming_buffer.size());
@@ -67,6 +68,8 @@ private:
     usize m_incoming_buffer_usage = 0uz;
 
     assify<boost::asio::ip::tcp::socket> m_socket;
+
+    configuration m_config;
 
     bot* m_bot = nullptr;
 
