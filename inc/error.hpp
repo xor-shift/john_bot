@@ -1,15 +1,21 @@
 #pragma once
 
 #include <spdlog/fmt/fmt.h>
-#include <cpptrace/cpptrace.hpp>
 
 #include <expected>
 #include <optional>
+#include <vector>
 
 namespace john {
 
 struct error {
-    error() {}
+    error();
+
+    error(error&& other) noexcept
+        : m_trace(std::move(other.m_trace)) {}
+
+    error(error const& other)
+        : m_trace(other.m_trace) {}
 
     constexpr virtual ~error() = default;
 
@@ -20,10 +26,10 @@ struct error {
 
     constexpr virtual auto description() const -> std::string_view = 0;
 
-    constexpr auto backtrace() -> cpptrace::raw_trace& { return m_trace; }
+    constexpr auto backtrace() const -> std::vector<std::uintptr_t> const& { return m_trace; }
 
 private:
-    cpptrace::raw_trace m_trace;
+    std::vector<std::uintptr_t> m_trace;
 };
 
 }  // namespace john
@@ -38,6 +44,11 @@ struct string_error final : john::error {
     string_error(std::string description, std::unique_ptr<error> source = nullptr)
         : m_description(std::move(description))
         , m_source(std::move(source)) {}
+
+    template<typename T>
+        requires(std::is_base_of_v<john::error, T>)
+    string_error(std::string description, T&& source)
+        : string_error(std::move(description), std::make_unique<std::remove_cvref_t<T>>(std::forward<T>(source))) {}
 
     constexpr auto source() & -> error* { return m_source.get(); }
     constexpr auto source() const& -> const error* { return m_source.get(); }
@@ -69,12 +80,14 @@ struct error final : john::error {
         : error(string_error(ec.what())) {}
 
     error(error const& other)
-        : m_deleter(other.m_deleter)
+        : john::error(static_cast<john::error const&>(other))
+        , m_deleter(other.m_deleter)
         , m_copier(other.m_copier)
         , m_original(m_copier(other.m_original)) {}
 
     error(error&& other) noexcept
-        : m_deleter(other.m_deleter)
+        : john::error(static_cast<john::error&&>(other))
+        , m_deleter(other.m_deleter)
         , m_copier(other.m_copier)
         , m_original(other.m_original) {
         other.m_original = nullptr;
@@ -128,17 +141,5 @@ template<>
 struct fmt::formatter<john::error> {
     constexpr auto parse(fmt::format_parse_context& ctx) -> fmt::format_parse_context::iterator { return ctx.begin(); }
 
-    auto format(john::error const& error, fmt::format_context& ctx) -> fmt::format_context::iterator {
-        auto it = ctx.out();
-
-        it = fmt::format_to(it, "error with description: {}", error.description());
-
-        const auto* cause = error.source();
-        while (cause != nullptr) {
-            it = fmt::format_to(it, "\ncaused by error: {}", cause->description());
-            cause = cause->source();
-        }
-
-        return it;
-    }
+    auto format(john::error const& error, fmt::format_context& ctx) -> fmt::format_context::iterator;
 };

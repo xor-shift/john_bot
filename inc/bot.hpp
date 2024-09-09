@@ -2,6 +2,7 @@
 
 #include <error.hpp>
 #include <kv.hpp>
+#include <sqlite/database.hpp>
 
 #include <boost/asio/awaitable.hpp>
 
@@ -34,6 +35,10 @@ struct thing {
 
 // john bot
 struct bot {
+    bot(sqlite::database database, boost::asio::any_io_executor& executor)
+        : m_database(std::move(database))
+        , m_executor(executor) {}
+
     auto run() -> boost::asio::awaitable<anyhow::result<void>>;
 
     // meant to be called by "thing"s
@@ -45,7 +50,13 @@ struct bot {
         m_things.emplace_back(std::make_unique<B>(std::forward<Args>(args)...));
     }
 
+    // TODO: restrict update and insert on const when the db is being used through <sqlite/*.hpp>
+    auto get_db() const -> sqlite3& { return *m_database; }
+
 private:
+    sqlite::database m_database;
+    boost::asio::any_io_executor& m_executor;
+
     std::vector<std::unique_ptr<thing>> m_things;
 };
 

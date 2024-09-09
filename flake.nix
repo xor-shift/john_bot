@@ -24,7 +24,7 @@
           pkg-config cmake ninja codespell
           lldb
 
-          openssl
+          openssl sqlite
         ];
       };
     }

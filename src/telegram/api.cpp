@@ -250,12 +250,12 @@ private:
 
     template<typename Variant>
     struct variant_reader<Variant, std::monostate> {
-        static auto try_read(json::object const& from_within, auto name_it) -> anyhow::result<std::optional<Variant>> { return std::nullopt; }
+        static auto try_read([[maybe_unused]] json::object const& from_within, [[maybe_unused]] auto name_it) -> anyhow::result<std::optional<Variant>> { return std::nullopt; }
     };
 
     template<typename Variant>
     struct variant_reader<Variant> {
-        static auto try_read(json::object const& from_within, auto name_it) -> anyhow::result<std::optional<Variant>> { return _anyhow("no key suitable for the variant exists"); }
+        static auto try_read([[maybe_unused]] json::object const& from_within, [[maybe_unused]] auto name_it) -> anyhow::result<std::optional<Variant>> { return _anyhow("no key suitable for the variant exists"); }
     };
 
     template<typename Variant, typename V, typename... Vs>

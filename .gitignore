@@ -5,5 +5,5 @@ compile_commands.json
 run
 build
 
-schema.sql
+bootstrap.sql
 

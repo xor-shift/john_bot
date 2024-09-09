@@ -4,11 +4,13 @@
 
 #include <memory>
 #include <ranges>
+#include <string>
 #include <string_view>
 
 namespace john {
 
 namespace detail {
+
 template<typename StoredType, typename Sized>
     requires requires(Sized const& v) { v.size(); }
 static constexpr auto get_size_arr(Sized const& v) -> std::array<char, sizeof(StoredType)> {
@@ -147,6 +149,10 @@ struct basic_mini_kv {
         }
 
         return true;
+    }
+
+    constexpr auto serialize() const -> std::string {
+        return "";
     }
 
 private:

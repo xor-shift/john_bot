@@ -1,0 +1,7 @@
+insert into clients_telegram (user_id, token) values (1337, 'AAAAAAAAAAAAA_AAAAAAAAAAAAAAAAAAAAA');
+
+insert into clients_irc (id, server, port, username, realname) values (0, 'irc.example.com', 6667, 'John Bot', 'Bohn Jot');
+insert into irc_nick_choices (irc_id, choice_no, nick) values (0, 0, 'JohnBot');
+insert into irc_nick_choices (irc_id, choice_no, nick) values (0, 1, 'BohnJot');
+insert into irc_channels (irc_id, channel_no, channel) values (0, 0, '#test');
+
