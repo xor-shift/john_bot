@@ -5,6 +5,7 @@
 #include <sqlite3.h>
 
 #include <stuff/core/integers.hpp>
+#include <stuff/core/try.hpp>
 
 namespace sqlite {
 
@@ -54,6 +55,13 @@ struct binder<i64> {
     inline static constexpr auto bind_fn = sqlite3_bind_int;
 };
 
+template<>
+struct binder<std::string> {
+    static auto bind_fn(sqlite3_stmt* statement, int column, std::string const& str) {
+        sqlite3_bind_text(statement, column, str.c_str(), str.size(), SQLITE_TRANSIENT);  //
+    }
+};
+
 template<typename T>
 using binder_t = typename binder<std::remove_cvref_t<T>>::binder;
 
@@ -96,4 +104,4 @@ template<typename Fun>
 
 }  // namespace detail
 
-}
+}  // namespace sqlite

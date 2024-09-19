@@ -1,14 +1,20 @@
 #pragma once
 
+#include <assio/as_expected.hpp>
 #include <error.hpp>
 #include <kv.hpp>
 #include <sqlite/database.hpp>
 
+#include <spdlog/spdlog.h>
 #include <boost/asio/awaitable.hpp>
+#include <boost/asio/experimental/concurrent_channel.hpp>
 
 namespace john {
 
 struct bot;
+struct thing;
+
+namespace payloads {
 
 struct incoming_message {
     std::string_view m_thing_id;
@@ -22,42 +28,96 @@ struct outgoing_message {
     std::string m_content;
 };
 
-using internal_message = std::variant<incoming_message, outgoing_message>;
+struct add_thing {
+    std::unique_ptr<thing> m_thing;
+};
+
+struct remove_thing {
+    std::string m_thing_identifier;
+};
+
+struct exit {};
+
+struct other {
+    std::span<const u8> m_data;
+};
+
+}  // namespace payloads
+
+using message_payload = std::variant<
+  payloads::incoming_message,
+  payloads::outgoing_message,
+  payloads::add_thing,
+  payloads::remove_thing,
+  payloads::exit,
+  payloads::other
+  /**/>;
+
+struct message {
+    std::string m_from;
+    std::string m_to;
+
+    usize m_serial;
+    std::optional<usize> m_reply_serial;
+
+    message_payload m_payload;
+};
 
 struct thing {
     virtual ~thing() = default;
 
-    // pins bot
-    virtual auto worker(bot& bot) -> boost::asio::awaitable<void> = 0;
+    virtual auto get_id() const -> std::string_view = 0;
 
-    virtual auto handle(internal_message const&) -> boost::asio::awaitable<void> = 0;
+    // pins bot
+    virtual auto worker(bot& bot) -> boost::asio::awaitable<anyhow::result<void>> = 0;
+
+    virtual auto handle(message const&) -> boost::asio::awaitable<anyhow::result<void>> = 0;
 };
 
 // john bot
 struct bot {
     bot(sqlite::database database, boost::asio::any_io_executor& executor)
         : m_database(std::move(database))
-        , m_executor(executor) {}
+        , m_executor(executor)
+        , m_message_channel(executor, 32uz) // TODO: this is terrible
+        , m_completion_channel(executor) {}
 
     auto run() -> boost::asio::awaitable<anyhow::result<void>>;
 
-    // meant to be called by "thing"s
-    auto new_message(internal_message msg) -> boost::asio::awaitable<void>;
-
-    template<typename B, typename... Args>
-        requires(std::is_base_of_v<thing, B>)
-    void add_thing(Args&&... args) {
-        m_things.emplace_back(std::make_unique<B>(std::forward<Args>(args)...));
-    }
+    // - meant to be called by "thing"s.
+    // - the message serial will be overwritten.
+    auto queue_message(message msg) -> boost::asio::awaitable<usize>;
 
     // TODO: restrict update and insert on const when the db is being used through <sqlite/*.hpp>
     auto get_db() const -> sqlite3& { return *m_database; }
+
+    auto display_name(john::mini_kv const& kv) const -> std::optional<std::string>;
+
+    void set_display_name(john::mini_kv const& kv, std::string name);
+
+    auto get_executor() -> boost::asio::any_io_executor& { return m_executor; }
 
 private:
     sqlite::database m_database;
     boost::asio::any_io_executor& m_executor;
 
-    std::vector<std::unique_ptr<thing>> m_things;
+    std::unordered_map<std::string, std::unique_ptr<thing>> m_things;
+
+    mutable std::mutex m_display_names_mutex{};
+    std::unordered_map<john::mini_kv, std::string> m_display_names{};
+
+    std::atomic<usize> m_previous_serial{1uz};
+
+    assify<boost::asio::experimental::concurrent_channel<void(boost::system::error_code, message)>> m_message_channel;
+
+    assify<boost::asio::experimental::concurrent_channel<void(boost::system::error_code, std::string_view)>> m_completion_channel;
+
+    auto handle_message(message msg) -> boost::asio::awaitable<void>;
+
+    template<typename Payload>
+    auto handle_message_internal(message&& msg, Payload&& payload) -> boost::asio::awaitable<anyhow::result<void>>;
+
+    auto handle_message_internal(message msg) -> boost::asio::awaitable<anyhow::result<void>>;
 };
 
 }  // namespace john

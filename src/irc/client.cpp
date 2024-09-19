@@ -1,5 +1,7 @@
 #include <irc/client.hpp>
 
+#include <sqlite/exec.hpp>
+
 #include <stuff/core/visitor.hpp>
 
 #include <spdlog/spdlog.h>
@@ -8,12 +10,14 @@
 #include <boost/asio/detached.hpp>
 
 namespace asio = boost::asio;
+using anyhow::result;
+using asio::awaitable;
 using boost::asio::ip::tcp;
 
 namespace john::irc {
 
-static void print_irc_message(message_view const& message) {
-    spdlog::debug("raw message: \"{}\"", message.m_original_message);
+static void print_irc_message(message_view const& msg) {
+    spdlog::debug("raw message: \"{}\"", msg.m_original_message);
 
     auto print_optional = []<typename T>(std::string_view name, std::optional<T> const& v) {
         if (!v) {
@@ -23,20 +27,20 @@ static void print_irc_message(message_view const& message) {
         }
     };
 
-    print_optional("name", message.m_prefix_name);
-    print_optional("user", message.m_prefix_user);
-    print_optional("host", message.m_prefix_host);
+    print_optional("name", msg.m_prefix_name);
+    print_optional("user", msg.m_prefix_user);
+    print_optional("host", msg.m_prefix_host);
 
-    spdlog::debug("command: {}", message.m_command);
+    spdlog::debug("command: {}", msg.m_command);
 
-    for (auto i = 0uz; auto const& param : message.params()) {
+    for (auto i = 0uz; auto const& param : msg.params()) {
         spdlog::debug("param #{}: \"{}\"", i++, param);
     }
 
-    print_optional("trailing", message.m_trailing);
+    print_optional("trailing", msg.m_trailing);
 }
 
-auto irc_client::worker(bot& bot) -> asio::awaitable<void> {
+auto irc_client::worker(bot& bot) -> awaitable<result<void>> {
     m_bot = &bot;
     for (auto try_no = 1uz;; try_no++) {
         auto res = co_await run_inner();
@@ -52,33 +56,14 @@ auto irc_client::worker(bot& bot) -> asio::awaitable<void> {
             continue;
         }
     }
+
+    co_return result<void>{};
 }
 
-auto irc_client::handle(internal_message const& message) -> boost::asio::awaitable<void> {
-    const auto visitor = stf::multi_visitor{
-      [&](john::outgoing_message const& message) -> boost::asio::awaitable<void> {
-          if (message.m_target["ident"] != m_config.m_identifier) {
-              co_return;
-          }
-
-          const auto target = message.m_target["target"].value_or("");
-
-          co_await send_message(message::bare("PRIVMSG").with_param(std::string(target)).with_trailing(message.m_content));
-
-          co_return;
-      },
-      [](auto const&) -> boost::asio::awaitable<void> { co_return; }
-    };
-
-    co_await std::visit(visitor, message);
-
-    co_return;
-}
-
-auto irc_client::run_inner() -> asio::awaitable<std::expected<void, boost::system::error_code>> {
+auto irc_client::run_inner() -> awaitable<std::expected<void, boost::system::error_code>> {
     auto resolver = assify<tcp::resolver>(m_executor);
 
-    auto endpoint = TRYC(co_await resolver.async_resolve("198.18.0.1", "6667"));
+    auto endpoint = TRYC(co_await resolver.async_resolve(m_config.m_server, std::to_string(m_config.m_port)));
     co_await m_socket.async_connect(endpoint->endpoint());
 
     co_await state_change(state::connected{});
@@ -114,7 +99,7 @@ auto irc_client::run_inner() -> asio::awaitable<std::expected<void, boost::syste
     co_return std::expected<void, boost::system::error_code>{};
 }
 
-auto irc_client::message_handler(message_view const& message) -> asio::awaitable<void> {
+auto irc_client::message_handler(message_view const& message) -> awaitable<void> {
     // print_irc_message(message);
 
     if (message.m_command == reply{"PING"}) {
@@ -128,14 +113,14 @@ auto irc_client::message_handler(message_view const& message) -> asio::awaitable
     const auto params = std::vector(std::from_range, message.params());
 
     const auto state_visitor = stf::multi_visitor{
-      [&](state::connected) -> asio::awaitable<void> {
+      [&](state::connected) -> awaitable<void> {
           if (message.m_command == reply{001}) {
               co_await state_change(state::registered{});
           } else if (message.m_command == reply{numeric_reply::ERR_NICKNAMEINUSE}) {
               co_await state_change(state::failure_registration{});
           }
       },
-      [&](state::registered& state) -> asio::awaitable<void> {
+      [&](state::registered& state) -> awaitable<void> {
           if (message.m_command == reply{"PRIVMSG"}) {
               if (params.size() != 1uz) {
                   spdlog::error("PRIVMSG with #params != 1 (is {} instead)", params.size());
@@ -143,35 +128,50 @@ auto irc_client::message_handler(message_view const& message) -> asio::awaitable
               }
               const auto is_private_message = params[0] == state.m_nick;
 
-              auto internal_msg = incoming_message{
+              auto payload = payloads::incoming_message{
                 .m_thing_id = m_config.m_identifier,
                 .m_sender_identifier = {},
                 .m_return_to_sender = {},
                 .m_content = std::string{message.m_trailing.value_or(std::string_view{})},
               };
 
-              internal_msg.m_sender_identifier.push_back("ident", m_config.m_identifier);
-              internal_msg.m_sender_identifier.push_back("nick", message.m_prefix_name.value_or(""));
+              payload.m_sender_identifier.push_back("ident", m_config.m_identifier);
+              payload.m_sender_identifier.push_back("nick", message.m_prefix_name.value_or(""));
 
-              internal_msg.m_return_to_sender.push_back("ident", m_config.m_identifier);
-              internal_msg.m_return_to_sender.push_back("target", is_private_message ? message.m_prefix_name.value_or("") : params[0]);
+              payload.m_return_to_sender.push_back("ident", m_config.m_identifier);
+              payload.m_return_to_sender.push_back("target", is_private_message ? message.m_prefix_name.value_or("") : params[0]);
 
-              co_await m_bot->new_message(std::move(internal_msg));
+              if (message.m_prefix_name && !m_bot->display_name(payload.m_sender_identifier)) {
+                  auto display_name = fmt::format("{} ({})", *message.m_prefix_name, m_config.m_server);
+                  m_bot->set_display_name(payload.m_sender_identifier, std::move(display_name));
+              }
+
+              auto internal_message = john::message{
+                .m_from = "",
+                .m_to = "",
+
+                .m_serial = 0uz,
+                .m_reply_serial = std::nullopt,
+
+                .m_payload = std::move(payload),
+              };
+
+              co_await m_bot->queue_message(std::move(internal_message));
           }
           co_return;  //
       },
-      [&](auto const&) -> asio::awaitable<void> { co_return; },
+      [&](auto const&) -> awaitable<void> { co_return; },
     };
     co_await std::visit(state_visitor, m_state);
 
     co_return;
 }
 
-auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
+auto irc_client::state_change(state_t new_state) -> awaitable<void> {
     const auto old_state = m_state;
     m_state = new_state;
 
-    auto try_register = [&](std::string_view nick, std::string_view user, std::string_view realname) -> asio::awaitable<void> {
+    auto try_register = [&](std::string_view nick, std::string_view user, std::string_view realname) -> awaitable<void> {
         co_await send_message(message::bare("NICK").with_param(std::string(nick)));
         co_await send_message(message::bare("USER")  //
                                 .with_param(m_config.m_user)
@@ -183,7 +183,7 @@ auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
     auto try_register_n = [&](usize n) { return try_register(m_config.m_nicks[n], m_config.m_user, m_config.m_realname); };
 
     const auto state_visitor = stf::multi_visitor{
-      [&](state::connected& state) -> asio::awaitable<void> {
+      [&](state::connected& state) -> awaitable<void> {
           if (state.m_nick_try >= m_config.m_nicks.size()) {
               spdlog::error("ran out of nicks to try, oh well!");
               co_await state_change(state::failure_registration{});
@@ -192,7 +192,7 @@ auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
 
           co_return;
       },
-      [&](state::registered& state) -> asio::awaitable<void> {
+      [&](state::registered& state) -> awaitable<void> {
           if (!std::holds_alternative<state::connected>(old_state)) {
               spdlog::error("went into state::registered from something other than state::connected");
               co_return;
@@ -208,7 +208,7 @@ auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
           }
           co_return;
       },
-      [&](state::failure_registration) -> asio::awaitable<void> {
+      [&](state::failure_registration) -> awaitable<void> {
           if (!std::holds_alternative<state::connected>(old_state)) {
               spdlog::error(
                 "a supposed registration failure despite the previous state being something other than state::connected?? how abnormal!! ive never seen such a thing- i must "
@@ -230,20 +230,53 @@ auto irc_client::state_change(state_t new_state) -> asio::awaitable<void> {
 
           co_return;
       },
-      [&](auto const&) -> asio::awaitable<void> { co_return; },
+      [&](auto const&) -> awaitable<void> { co_return; },
     };
     co_await std::visit(state_visitor, m_state);
 
     co_return;
 }
 
-auto irc_client::send_message(message const& msg) -> asio::awaitable<void> {
+auto irc_client::send_message(message const& msg) -> awaitable<void> {
     auto strings_to_send = msg.encode();
 
     for (auto const& str : strings_to_send) {
         spdlog::trace("sending a message with command {}", msg.m_command);
         co_await m_socket.async_send(asio::const_buffer{str.data(), str.size()});
     }
+}
+
+template<typename Payload>
+auto irc_client::bot_message_handler(john::message const& msg, Payload const& payload) -> awaitable<result<void>> {
+    co_return result<void>{};  //
+}
+
+template<>
+auto irc_client::bot_message_handler(john::message const& msg, payloads::outgoing_message const& payload) -> awaitable<result<void>> {
+    if (payload.m_target["ident"] != m_config.m_identifier) {
+        co_return result<void>{};
+    }
+
+    const auto target = payload.m_target["target"].value_or("");
+
+    co_await send_message(message::bare("PRIVMSG").with_param(std::string(target)).with_trailing(payload.m_content));
+
+    co_return result<void>{};  //
+}
+
+template<>
+auto irc_client::bot_message_handler(john::message const& msg, payloads::exit const& payload) -> awaitable<result<void>> {
+    co_await state_change(state::disconnecting{});
+    co_return result<void>{};  //
+}
+
+auto irc_client::handle(john::message const& msg) -> awaitable<result<void>> {
+    return std::visit(
+      [this, &msg](auto const& payload) {
+          return bot_message_handler(msg, payload);  //
+      },
+      msg.m_payload
+    );
 }
 
 }  // namespace john::irc

@@ -16,9 +16,11 @@ struct client final : thing {
     client(client const&) = delete;
     client(client&&) = delete;
 
-    auto worker(bot& bot) -> boost::asio::awaitable<void> override;
+    auto get_id() const -> std::string_view override { return m_config.m_identifier; }
 
-    auto handle(internal_message const& message) -> boost::asio::awaitable<void> override;
+    auto worker(bot& bot) -> boost::asio::awaitable<anyhow::result<void>> override;
+
+    auto handle(message const& msg) -> boost::asio::awaitable<anyhow::result<void>> override;
 
 private:
     boost::asio::any_io_executor& m_executor;
@@ -27,7 +29,15 @@ private:
 
     configuration m_config;
 
-    auto worker_inner(bot& bot) -> boost::asio::awaitable<anyhow::result<void>>;
+    bot* m_bot = nullptr;
+
+    auto worker_inner() -> boost::asio::awaitable<anyhow::result<void>>;
+
+    template<typename T>
+    auto handle_update(T const& update) -> boost::asio::awaitable<anyhow::result<void>>;
+
+    template<typename Payload>
+    auto bot_message_handler(john::message const& msg, Payload const& payload) -> boost::asio::awaitable<anyhow::result<void>>;
 };
 
 }  // namespace john::telegram

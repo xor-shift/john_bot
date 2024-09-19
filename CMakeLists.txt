@@ -56,6 +56,8 @@ add_library(${PROJECT_NAME}_lib
     inc/telegram/client.hpp
     inc/telegram/connection.hpp
 
+    inc/things/relay.hpp
+
     inc/alloc.hpp
     inc/bot.hpp
     inc/error.hpp
@@ -66,6 +68,7 @@ add_library(${PROJECT_NAME}_lib
     src/telegram/api.cpp
     src/telegram/client.cpp
     src/telegram/connection.cpp
+    src/things/relay.cpp
     src/bot.cpp
     src/error.cpp
     src/sqlite.cpp
@@ -87,6 +90,7 @@ target_link_libraries(${PROJECT_NAME}_lib PUBLIC
     Boost::json
     Boost::mysql
 
+    stf::hash
     stf::intro
     stf::scope
 )

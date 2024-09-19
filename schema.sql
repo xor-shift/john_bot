@@ -35,6 +35,15 @@ create table if not exists irc_channels (
 
 create table if not exists relay_mappings (
   from_kv text not null,
-  to_kv text not null
+  to_kv text not null,
+
+  primary key (from_kv)
+);
+
+create table if not exists display_names (
+  sender_kv text not null,
+  display_name text not null,
+
+  primary key (sender_kv)
 );
 

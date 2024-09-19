@@ -2,11 +2,41 @@
 
 #include <error.hpp>
 #include <irc/replies.hpp>
+
+#include <stuff/core/integers.hpp>
 #include <stuff/core/try.hpp>
 
 #include <ranges>
 
 namespace john::irc {
+
+namespace detail {
+
+struct swallower {
+    // constexpr swallower() = default;
+    // constexpr swallower(auto&&) {}
+
+    constexpr auto operator=([[maybe_unused]] auto&& _) -> swallower& { return *this; }
+};
+
+struct funky_iterator {
+    constexpr auto operator++() -> funky_iterator& {
+        m_offset++;
+        return *this;
+    }
+
+    constexpr auto operator++(int) -> funky_iterator {
+        auto ret = *this;
+        ++*this;
+        return ret;
+    }
+
+    constexpr auto operator*() const -> swallower { return {}; }
+
+    usize m_offset = 0uz;
+};
+
+}  // namespace detail
 
 // received message
 struct message_view {
@@ -135,53 +165,83 @@ struct message {
     }
 
     auto with_param(std::string param) && -> message {
-        m_params.push_back(param);
+        m_params.emplace_back(std::move(param));
         return std::move(*this);
     }
 
     auto with_trailing(std::string trailing) && -> message {
-        m_trailing = trailing;
+        m_trailing.emplace(std::move(trailing));
         return std::move(*this);
     }
 
     auto encode() const -> std::vector<std::string> {
-        auto before_trailing = std::string{};
-        auto bt_it = std::back_inserter(before_trailing);
+        if (!m_trailing) {
+            auto str = std::string{};
+            encode_to(back_inserter(str));
+            return {std::move(str)};
+        }
 
+        const auto size_without_trailing = encode_to(detail::funky_iterator{}, "").m_offset;
+        const auto trailing_per_message = 512 - size_without_trailing;
+        const auto no_messages = m_trailing->size() / trailing_per_message + !!(m_trailing->size() % trailing_per_message);
+
+        auto ret = std::vector<std::string>{no_messages, ""};
+        for (auto i = 0uz; auto& msg : ret) {
+            auto cur_trailing = std::string_view{};
+
+            if (i + 1 == no_messages) {
+                cur_trailing = std::string_view{*m_trailing}.substr(trailing_per_message * i);
+            } else {
+                cur_trailing = std::string_view{*m_trailing}.substr(trailing_per_message * i, trailing_per_message);
+            }
+
+            msg.reserve(size_without_trailing + cur_trailing.size());
+
+            encode_to(back_inserter(msg), cur_trailing);
+
+            ++i;
+        }
+
+        return ret;
+    }
+
+private:
+    template<typename It>
+    auto encode_to(It it, std::optional<std::string_view> trailing = std::nullopt) const -> It {
         if (m_prefix_name) {
-            *bt_it++ = ':';
-            bt_it = std::copy(m_prefix_name->begin(), m_prefix_name->end(), bt_it);
+            *it++ = ':';
+            it = std::copy(m_prefix_name->begin(), m_prefix_name->end(), it);
 
             if (m_prefix_user) {
-                *bt_it++ = '!';
-                bt_it = std::copy(m_prefix_user->begin(), m_prefix_user->end(), bt_it);
+                *it++ = '!';
+                it = std::copy(m_prefix_user->begin(), m_prefix_user->end(), it);
             }
 
             if (m_prefix_host) {
-                *bt_it++ = '@';
-                bt_it = std::copy(m_prefix_host->begin(), m_prefix_host->end(), bt_it);
+                *it++ = '@';
+                it = std::copy(m_prefix_host->begin(), m_prefix_host->end(), it);
             }
 
-            *bt_it++ = ' ';
+            *it++ = ' ';
         }
 
-        bt_it = std::copy(m_command.begin(), m_command.end(), bt_it);
+        it = std::copy(m_command.begin(), m_command.end(), it);
 
         for (auto const& param : m_params) {
-            *bt_it++ = ' ';
-            bt_it = std::copy(param.begin(), param.end(), bt_it);
+            *it++ = ' ';
+            it = std::copy(param.begin(), param.end(), it);
         }
 
         // TODO: split messages on trailing
-        if (m_trailing) {
-            *bt_it++ = ' ';
-            bt_it = std::copy(m_trailing->begin(), m_trailing->end(), bt_it);
+        if (trailing) {
+            *it++ = ' ';
+            it = std::copy(trailing->begin(), trailing->end(), it);
         }
 
-        *bt_it++ = '\r';
-        *bt_it++ = '\n';
+        *it++ = '\r';
+        *it++ = '\n';
 
-        return {before_trailing};
+        return it;
     }
 };
 

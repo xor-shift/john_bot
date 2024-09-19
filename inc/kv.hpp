@@ -1,7 +1,9 @@
 #pragma once
 
 #include <stuff/core/integers.hpp>
+#include <stuff/hash/combine.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -127,6 +129,10 @@ struct basic_mini_kv {
         return std::nullopt;
     }
 
+    /*constexpr auto operator[](const char* str) const -> std::pair<std::string_view, std::string_view> {
+        return operator[](std::string_view{str});
+    }*/
+
     // complexity: linear
     constexpr auto operator[](usize n) const -> std::pair<std::string_view, std::string_view> {
         auto it = begin();
@@ -141,7 +147,7 @@ struct basic_mini_kv {
     constexpr auto contains(std::string_view key) const -> bool { return (*this)[key]; }
 
     // complexity: quadratic
-    constexpr auto strongly_equals(basic_mini_kv const& other) const -> bool {
+    constexpr auto operator==(basic_mini_kv const& other) const noexcept -> bool {
         for (auto const& [k, v] : *this) {
             if (auto v_other = other[k]; !v_other || *v_other != v) {
                 return false;
@@ -151,8 +157,117 @@ struct basic_mini_kv {
         return true;
     }
 
+    constexpr auto operator!=(basic_mini_kv const& other) const noexcept -> bool {
+        return !operator==(other);
+    }
+
+    static constexpr auto deserialize(std::string_view str, Allocator allocator = {}) -> basic_mini_kv {
+        using namespace std::string_view_literals;
+
+        // clang-format off
+        auto view =
+            std::views::zip(
+                std::views::iota(0uz),
+                str
+                | std::views::chunk_by([count = 0uz](const auto lhs, const auto rhs) mutable {
+                    count = (count + (lhs == '\\')) * (lhs == '\\');
+                    return !(lhs != '\\' && rhs == ';') || ((count % 2) == 1);
+                })
+            )
+            | std::views::transform([](auto const& pair) {
+                auto const& [idx, str] = pair;
+                return idx == 0
+                      ? std::string_view(str)
+                      : std::string_view(str).substr(1);
+            })
+            | std::views::transform([](auto const& str) {
+                // reversing and whatnot screws up the mutable lambda approach
+                // too bad
+                /*auto stuff = str
+                    | std::views::chunk_by([count = 0uz](const auto lhs, const auto rhs) mutable {
+                        count = (count + (lhs == '\\')) * (lhs == '\\');
+                        return !(lhs != '\\' && rhs == ':') || ((count % 2) == 1);
+                    })
+                    | std::views::transform([](auto const& v) { return std::string_view(v); })
+                    | std::views::take(2)
+                    | std::views::reverse;
+
+                auto arr = std::array<std::string_view, 2> {};
+                std::ranges::copy(stuff, arr.rbegin()); // funny approach if you ask me
+
+                return std::pair{arr[0], arr[1]};*/
+
+                auto split = 0uz;
+                for (auto escape_count = 0uz; split < str.size(); split++) {
+                    const auto c = str[split];
+                    const auto is_escape = c == '\\';
+                    const auto is_split = c == ':';
+
+                    if (is_split && (escape_count % 2) == 0) {
+                        break;
+                    }
+
+                    escape_count = (escape_count + is_escape) * is_escape;
+                }
+
+                if (split == str.size()) {
+                    return std::pair{""sv, str};
+                } else {
+                    const auto lhs = str.substr(0, split);
+                    const auto rhs = str.substr(split + 1);
+
+                    return std::pair{lhs, rhs};
+                }
+            });
+        // clang-format on
+
+        auto ret = basic_mini_kv{allocator};
+
+        for (auto const& [k, v] : view) {
+            ret.push_back(k, v);
+        }
+
+        return ret;
+    }
+
     constexpr auto serialize() const -> std::string {
-        return "";
+        auto required_bytes = 0uz;
+        for (auto const& [k, v] : *this) {
+            const auto when = [](char c) { return c == ':' || c == ';' || c == '\\'; };
+            required_bytes += k.size() + std::ranges::count_if(k, when);  // key
+            required_bytes += 1uz;                                        // colon
+            required_bytes += v.size() + std::ranges::count_if(v, when);  // value
+            required_bytes += 1uz;                                        // semicolon
+        }
+        required_bytes -= 1uz;  // last semicolon
+
+        auto ret = std::string(required_bytes, ';');
+        auto ret_it = ret.begin();
+
+        const auto escaped_copy = [](std::string_view str, auto iter) {
+            for (char c : str) {
+                auto escapes = std::array<char, 3>{':', ';', '\\'};
+                if (std::ranges::find(escapes, c) != std::ranges::end(escapes)) {
+                    *iter++ = '\\';
+                }
+                *iter++ = c;
+            }
+
+            return iter;
+        };
+
+        for (auto first = true; auto const& [k, v] : *this) {
+            if (!first) {
+                *ret_it++ = ';';
+            }
+            first = false;
+
+            ret_it = escaped_copy(k, ret_it);
+            *ret_it++ = ':';
+            ret_it = escaped_copy(v, ret_it);
+        }
+
+        return ret;
     }
 
 private:
@@ -163,3 +278,17 @@ private:
 using mini_kv = basic_mini_kv<>;
 
 }  // namespace john
+
+template<typename Allocator>
+struct std::hash<john::basic_mini_kv<Allocator>> {
+    constexpr auto operator()(john::basic_mini_kv<Allocator> const& kv) const -> usize {
+        auto ret = 0uz;
+
+        for (auto const& [k, v] : kv) {
+            ret = stf::hash_combine(ret, std::hash<std::string_view>{}(k));
+            ret = stf::hash_combine(ret, std::hash<std::string_view>{}(k));
+        }
+
+        return ret;
+    }
+};

@@ -29,7 +29,7 @@ void assert_valid_message(std::string_view chars, message_view expected) {
     }
 }
 
-TEST(message, message) {
+TEST(irc, message) {
     using john::irc::numeric_reply;
     using john::irc::reply;
 
@@ -100,4 +100,12 @@ TEST(message, message) {
       }
     );
     */
+}
+
+TEST(irc, message_trailing_split) {
+    auto messages = john::irc::message::bare("PRIVMSG").with_param("#test").with_trailing(std::string(512, 'A')).encode();
+    ASSERT_EQ(messages.size(), 2uz);
+    // "PRIVMSG #test :"
+    ASSERT_EQ(messages[0].size(), 512uz);
+    ASSERT_EQ(messages[1].size(), 15uz * 2 + 2uz);
 }
