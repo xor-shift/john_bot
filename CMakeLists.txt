@@ -56,6 +56,8 @@ add_library(${PROJECT_NAME}_lib
     inc/telegram/client.hpp
     inc/telegram/connection.hpp
 
+    inc/things/dummy.hpp
+    inc/things/logger.hpp
     inc/things/relay.hpp
 
     inc/alloc.hpp
@@ -68,7 +70,9 @@ add_library(${PROJECT_NAME}_lib
     src/telegram/api.cpp
     src/telegram/client.cpp
     src/telegram/connection.cpp
+    src/things/logger.cpp
     src/things/relay.cpp
+    src/argv.cpp
     src/bot.cpp
     src/error.cpp
     src/sqlite.cpp
@@ -113,6 +117,7 @@ target_compile_options(${PROJECT_NAME} PUBLIC ${warning_flags})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_lib)
 
 add_executable(${PROJECT_NAME}_test
+    test/argv.cpp
     test/error.cpp
     test/message.cpp
     test/kv.cpp

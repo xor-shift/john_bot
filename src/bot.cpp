@@ -97,6 +97,18 @@ auto bot::queue_message(message message) -> awaitable<usize> {
     co_return message_serial;
 }
 
+auto bot::queue_a_reply(message const& reply_to, std::string_view from_id, message_payload payload) -> awaitable<void> {
+    co_await queue_message(message{
+      .m_from = std::string{from_id},
+      .m_to = reply_to.m_from,
+
+      .m_serial = 0uz,
+      .m_reply_serial = reply_to.m_serial,
+
+      .m_payload = std::move(payload),
+    });
+}
+
 auto bot::handle_message(message msg) -> awaitable<void> {
     spdlog::debug("new message with serial {} from \"{}\" addressed to \"{}\"", msg.m_serial, msg.m_from, msg.m_to);
 

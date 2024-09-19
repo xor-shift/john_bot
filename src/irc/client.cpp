@@ -1,5 +1,6 @@
 #include <irc/client.hpp>
 
+#include <argv.hpp>
 #include <sqlite/exec.hpp>
 
 #include <stuff/core/visitor.hpp>
@@ -128,23 +129,20 @@ auto irc_client::message_handler(message_view const& message) -> awaitable<void>
               }
               const auto is_private_message = params[0] == state.m_nick;
 
-              auto payload = payloads::incoming_message{
-                .m_thing_id = m_config.m_identifier,
-                .m_sender_identifier = {},
-                .m_return_to_sender = {},
-                .m_content = std::string{message.m_trailing.value_or(std::string_view{})},
+              const auto content = message.m_trailing.value_or(std::string_view{});
+
+              const auto things_after_payload_creation = [&](auto& payload) {
+                  payload.m_sender_identifier.push_back("ident", m_config.m_identifier);
+                  payload.m_sender_identifier.push_back("nick", message.m_prefix_name.value_or(""));
+
+                  payload.m_return_to_sender.push_back("ident", m_config.m_identifier);
+                  payload.m_return_to_sender.push_back("target", is_private_message ? message.m_prefix_name.value_or("") : params[0]);
+
+                  if (message.m_prefix_name && !m_bot->display_name(payload.m_sender_identifier)) {
+                      auto display_name = fmt::format("{} ({})", *message.m_prefix_name, m_config.m_server);
+                      m_bot->set_display_name(payload.m_sender_identifier, std::move(display_name));
+                  }
               };
-
-              payload.m_sender_identifier.push_back("ident", m_config.m_identifier);
-              payload.m_sender_identifier.push_back("nick", message.m_prefix_name.value_or(""));
-
-              payload.m_return_to_sender.push_back("ident", m_config.m_identifier);
-              payload.m_return_to_sender.push_back("target", is_private_message ? message.m_prefix_name.value_or("") : params[0]);
-
-              if (message.m_prefix_name && !m_bot->display_name(payload.m_sender_identifier)) {
-                  auto display_name = fmt::format("{} ({})", *message.m_prefix_name, m_config.m_server);
-                  m_bot->set_display_name(payload.m_sender_identifier, std::move(display_name));
-              }
 
               auto internal_message = john::message{
                 .m_from = "",
@@ -153,8 +151,28 @@ auto irc_client::message_handler(message_view const& message) -> awaitable<void>
                 .m_serial = 0uz,
                 .m_reply_serial = std::nullopt,
 
-                .m_payload = std::move(payload),
+                .m_payload = {},
               };
+
+              if (content.starts_with("!s")) {
+                  auto payload = payloads::command{
+                    .m_thing_id = m_config.m_identifier,
+                    .m_sender_identifier = {},
+                    .m_return_to_sender = {},
+                    .m_argv = john::make_argv(content.substr(2)),
+                  };
+                  things_after_payload_creation(payload);
+                  internal_message.m_payload = std::move(payload);
+              } else {
+                  auto payload = payloads::incoming_message{
+                    .m_thing_id = m_config.m_identifier,
+                    .m_sender_identifier = {},
+                    .m_return_to_sender = {},
+                    .m_content = std::string{content},
+                  };
+                  things_after_payload_creation(payload);
+                  internal_message.m_payload = std::move(payload);
+              }
 
               co_await m_bot->queue_message(std::move(internal_message));
           }

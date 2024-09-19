@@ -7,6 +7,7 @@
 #include <sqlite/sqlite.hpp>
 #include <telegram/client.hpp>
 #include <things/dummy.hpp>
+#include <things/logger.hpp>
 #include <things/relay.hpp>
 
 #include <stuff/core/integers.hpp>
@@ -114,8 +115,8 @@ auto setup_bot(john::bot& bot, sqlite3& db) -> awaitable<void> {
     }
 
     co_await add_thing<john::things::dummy>(bot);
-
     co_await add_thing<john::things::relay>(bot);
+    co_await add_thing<john::things::logger>(bot);
 
     co_return;
 }

@@ -183,23 +183,20 @@ struct message {
 
         const auto size_without_trailing = encode_to(detail::funky_iterator{}, "").m_offset;
         const auto trailing_per_message = 512 - size_without_trailing;
-        const auto no_messages = m_trailing->size() / trailing_per_message + !!(m_trailing->size() % trailing_per_message);
 
-        auto ret = std::vector<std::string>{no_messages, ""};
-        for (auto i = 0uz; auto& msg : ret) {
-            auto cur_trailing = std::string_view{};
+        auto ret = std::vector<std::string>{};
+        for (auto i = 0uz; i < m_trailing->size();) {
+            const auto rest_of_the_message = std::string_view{*m_trailing}.substr(i);
+            const auto linefeed = rest_of_the_message.find('\n');
+            const auto cur_trailing = rest_of_the_message.substr(0, std::min(linefeed, trailing_per_message));
+            i += cur_trailing.size() + !!(linefeed != std::string_view::npos);
 
-            if (i + 1 == no_messages) {
-                cur_trailing = std::string_view{*m_trailing}.substr(trailing_per_message * i);
-            } else {
-                cur_trailing = std::string_view{*m_trailing}.substr(trailing_per_message * i, trailing_per_message);
-            }
-
+            auto msg = std::string{};
             msg.reserve(size_without_trailing + cur_trailing.size());
 
             encode_to(back_inserter(msg), cur_trailing);
 
-            ++i;
+            ret.emplace_back(std::move(msg));
         }
 
         return ret;
