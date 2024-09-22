@@ -24,14 +24,12 @@ auto logger::handle(john::message const& msg) -> awaitable<result<void>> {
     const auto visitor = stf::multi_visitor{
       [](payloads::incoming_message const& msg) {
           spdlog::debug("payloads::incoming_message");
-          spdlog::debug("  thing_id: {}", msg.m_thing_id);
           spdlog::debug("  sender_identifier: {}", msg.m_sender_identifier.serialize());
           spdlog::debug("  return_to_sender: {}", msg.m_return_to_sender.serialize());
           spdlog::debug("  content: {}", msg.m_content);
       },
       [](payloads::command const& cmd) {
           spdlog::debug("payloads::incoming_message");
-          spdlog::debug("  thing_id: {}", cmd.m_thing_id);
           spdlog::debug("  sender_identifier: {}", cmd.m_sender_identifier.serialize());
           spdlog::debug("  return_to_sender: {}", cmd.m_return_to_sender.serialize());
           if (cmd.m_argv.empty()) {

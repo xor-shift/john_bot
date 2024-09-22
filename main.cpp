@@ -9,6 +9,7 @@
 #include <things/dummy.hpp>
 #include <things/logger.hpp>
 #include <things/relay.hpp>
+#include <things/tcp.hpp>
 
 #include <stuff/core/integers.hpp>
 #include <stuff/core/try.hpp>
@@ -21,14 +22,6 @@
 namespace asio = boost::asio;
 using anyhow::result;
 using asio::awaitable;
-
-struct irc_entry {
-    i32 m_id;
-    std::string m_server;
-    i32 m_port;
-    std::string m_username;
-    std::string m_realname;
-};
 
 template<typename Thing, typename... Args>
 auto add_thing(john::bot& bot, Args&&... args) -> boost::asio::awaitable<void> {
@@ -48,6 +41,17 @@ auto add_thing(john::bot& bot, Args&&... args) -> boost::asio::awaitable<void> {
     co_return;
 }
 
+struct irc_entry {
+    i32 m_id;
+    std::string m_server;
+    i32 m_port;
+    std::string m_password;
+    std::string m_username;
+    std::string m_realname;
+
+    bool m_enabled;
+};
+
 auto setup_single_irc(john::bot& bot, sqlite3& db, irc_entry entry) -> awaitable<result<void>> {
     auto nicks = TRYC(sqlite::query<std::string>(db, "select nick from irc_nick_choices where irc_id = ?", entry.m_id));
     auto channels = TRYC(sqlite::query<std::string>(db, "select channel from irc_channels where irc_id = ?", entry.m_id));
@@ -65,7 +69,7 @@ auto setup_single_irc(john::bot& bot, sqlite3& db, irc_entry entry) -> awaitable
         .m_port = static_cast<u16>(entry.m_port),
         .m_use_ssl = false,
 
-        .m_password = std::nullopt,
+        .m_password = entry.m_password.empty() ? std::nullopt : std::optional<std::string>(std::move(entry.m_password)),
         .m_nicks = std::move(nicks),
         .m_user = std::move(entry.m_username),
         .m_realname = std::move(entry.m_realname),
@@ -80,6 +84,11 @@ auto setup_irc(john::bot& bot, sqlite3& db) -> awaitable<result<void>> {
     for (auto&& entry : TRYC(sqlite::query<irc_entry>(db, "select rowid, * from clients_irc"))) {
         auto id = entry.m_id;
 
+        if (!entry.m_enabled) {
+            spdlog::debug("skipping the irc client with the id {} as it is disabled", id);
+            continue;
+        }
+
         auto res = co_await setup_single_irc(bot, db, std::move(entry));
 
         if (!res) {
@@ -91,7 +100,12 @@ auto setup_irc(john::bot& bot, sqlite3& db) -> awaitable<result<void>> {
 }
 
 auto setup_telegram(john::bot& bot, sqlite3& db) -> awaitable<result<void>> {
-    for (auto const& [id, token] : TRYC(sqlite::query<i64, std::string>(db, "select * from clients_telegram"))) {
+    for (auto const& [id, token, enabled] : TRYC(sqlite::query<i64, std::string, bool>(db, "select * from clients_telegram"))) {
+        if (!enabled) {
+            spdlog::info("skipping the telegram client with id {} as it is disabled", id);
+            continue;
+        }
+
         co_await add_thing<john::telegram::client>(
           bot, bot.get_executor(),
           john::telegram::configuration{
@@ -117,6 +131,7 @@ auto setup_bot(john::bot& bot, sqlite3& db) -> awaitable<void> {
     co_await add_thing<john::things::dummy>(bot);
     co_await add_thing<john::things::relay>(bot);
     co_await add_thing<john::things::logger>(bot);
+    co_await add_thing<john::things::tcp_thing>(bot, co_await asio::this_coro::executor);
 
     co_return;
 }

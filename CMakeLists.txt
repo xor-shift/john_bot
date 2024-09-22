@@ -59,6 +59,7 @@ add_library(${PROJECT_NAME}_lib
     inc/things/dummy.hpp
     inc/things/logger.hpp
     inc/things/relay.hpp
+    inc/things/tcp.hpp
 
     inc/alloc.hpp
     inc/bot.hpp
@@ -72,6 +73,7 @@ add_library(${PROJECT_NAME}_lib
     src/telegram/connection.cpp
     src/things/logger.cpp
     src/things/relay.cpp
+    src/things/tcp.cpp
     src/argv.cpp
     src/bot.cpp
     src/error.cpp
@@ -125,4 +127,10 @@ add_executable(${PROJECT_NAME}_test
 target_compile_options(${PROJECT_NAME}_test PUBLIC -fsanitize=address -fsanitize=undefined)
 target_link_options(${PROJECT_NAME}_test PUBLIC -fsanitize=address -fsanitize=undefined)
 target_link_libraries(${PROJECT_NAME}_test PRIVATE ${PROJECT_NAME}_lib gtest gtest_main)
+
+add_executable(terminal_sink terminal_sink.cpp)
+target_link_libraries(terminal_sink Boost::asio)
+target_compile_options(terminal_sink PUBLIC -fsanitize=address -fsanitize=undefined)
+target_link_options(terminal_sink PUBLIC -fsanitize=address -fsanitize=undefined)
+target_compile_options(terminal_sink PUBLIC ${warning_flags})
 

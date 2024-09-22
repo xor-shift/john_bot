@@ -14,17 +14,30 @@ namespace john {
 struct bot;
 struct thing;
 
+enum class user_level : int {
+    regular = 0,
+    admin = 1,
+    op = 2,
+};
+
 namespace payloads {
 
 struct incoming_message {
-    std::string_view m_thing_id;
     mini_kv m_sender_identifier;
     mini_kv m_return_to_sender;
+
     std::string m_content;
 };
 
+struct command_decl {
+    std::string_view m_command;
+    std::string_view m_description;
+
+    // TODO: add granular permissions
+    user_level m_min_level;
+};
+
 struct command {
-    std::string_view m_thing_id;
     mini_kv m_sender_identifier;
     mini_kv m_return_to_sender;
 
@@ -55,6 +68,7 @@ struct other {
 using message_payload = std::variant<
   std::monostate,
   payloads::incoming_message,
+  payloads::command_decl,
   payloads::command,
   payloads::outgoing_message,
   payloads::add_thing,
@@ -64,7 +78,7 @@ using message_payload = std::variant<
   /**/>;
 
 struct message {
-    std::string m_from;  // TODO: refactor to string_view
+    std::string_view m_from;
     std::string m_to;
 
     usize m_serial;
@@ -117,6 +131,8 @@ private:
 
     mutable std::mutex m_display_names_mutex{};
     std::unordered_map<john::mini_kv, std::string> m_display_names{};
+
+    std::unordered_map<std::string_view, payloads::command_decl> m_declared_commands{};
 
     std::atomic<usize> m_previous_serial{1uz};
 

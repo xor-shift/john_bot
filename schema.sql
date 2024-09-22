@@ -2,6 +2,8 @@ create table if not exists clients_telegram (
   user_id bigint not null,
   token char(35) not null,
 
+  enabled bool not null default true,
+
   primary key (user_id)
 );
 
@@ -9,8 +11,11 @@ create table if not exists clients_irc (
   server varchar(255) not null,
   port int unsigned not null,
 
+  password varchar(255) default null,
   username varchar(255) not null,
-  realname varchar(255) not null
+  realname varchar(255) not null,
+
+  enabled bool not null default true
 );
 
 create table if not exists irc_nick_choices (
@@ -37,7 +42,7 @@ create table if not exists relay_mappings (
   from_kv text not null,
   to_kv text not null,
 
-  primary key (from_kv)
+  primary key (from_kv, to_kv)
 );
 
 create table if not exists display_names (
@@ -47,3 +52,9 @@ create table if not exists display_names (
   primary key (sender_kv)
 );
 
+create table if not exists user_levels (
+  user_kv text not null,
+  level int not null,
+
+  primary key (user_kv)
+);

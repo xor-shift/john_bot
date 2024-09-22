@@ -49,9 +49,16 @@ struct field_names<types::chat> {
 };
 
 template<>
+struct field_names<types::message_entity> {
+    inline static constexpr const char* m_names[]{
+      "type", "offset", "length", "url", "user", "language", "custom_emoji_id",
+    };
+};
+
+template<>
 struct field_names<types::message> {
     inline static constexpr const char* m_names[]{
-      "message_id", "message_thread_id", "from", "chat", "text",
+      "message_id", "message_thread_id", "from", "chat", "text", "entities",
     };
 };
 
@@ -72,6 +79,9 @@ struct is_specialisation_of : std::false_type {};
 template<template<typename...> typename T, typename... Args>
 struct is_specialisation_of<T<Args...>, T> : std::true_type {};
 
+// TODO:
+// change the try_as_type functions to be regular functions instead of member function pointers
+// add support for true_type (requires the change above so that additional checks can be done)
 template<typename T>
 struct read_info;
 
@@ -255,7 +265,9 @@ private:
 
     template<typename Variant>
     struct variant_reader<Variant> {
-        static auto try_read([[maybe_unused]] json::object const& from_within, [[maybe_unused]] auto name_it) -> anyhow::result<std::optional<Variant>> { return _anyhow("no key suitable for the variant exists"); }
+        static auto try_read([[maybe_unused]] json::object const& from_within, [[maybe_unused]] auto name_it) -> anyhow::result<std::optional<Variant>> {
+            return _anyhow("no key suitable for the variant exists");
+        }
     };
 
     template<typename Variant, typename V, typename... Vs>

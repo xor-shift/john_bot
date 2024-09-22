@@ -22,13 +22,24 @@ struct column_reader<T> {
 };
 
 template<>
+struct column_reader<bool> {
+    static auto reader(sqlite3_stmt* statement, int column_no) -> bool {
+        return sqlite3_column_int(statement, column_no);  //
+    }
+};
+
+template<>
 struct column_reader<i64> {
     inline static constexpr auto reader = sqlite3_column_int64;
 };
 
 template<>
 struct column_reader<std::string> {
-    static auto reader(sqlite3_stmt* statement, int column_no) -> std::string { return reinterpret_cast<const char*>(sqlite3_column_text(statement, column_no)); }
+    static auto reader(sqlite3_stmt* statement, int column_no) -> std::string {
+        // TODO: add support for column_reader_t<optional<T>>
+        const auto* const str = reinterpret_cast<const char*>(sqlite3_column_text(statement, column_no));
+        return str == nullptr ? "" : str;
+    }
 };
 
 template<typename T>

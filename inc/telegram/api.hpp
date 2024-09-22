@@ -49,8 +49,21 @@ struct chat {
     std::optional<bool> m_is_forum;
 };
 
+struct message_entity {
+    inline constexpr static usize _stf_arity = 7uz;
+
+    std::string m_type;
+    i64 m_offset;
+    i64 m_length;
+
+    std::optional<std::string> m_url;              // text_link only
+    std::optional<user> m_user;                    // text_mention only
+    std::optional<std::string> m_language;         // pre only
+    std::optional<std::string> m_custom_emoji_id;  // custom_emoji only
+};
+
 struct message {
-    inline static constexpr usize _stf_arity = 5uz;
+    inline static constexpr usize _stf_arity = 6uz;
 
     i64 m_id;
     std::optional<i64> m_thread_id;
@@ -59,7 +72,7 @@ struct message {
     std::optional<chat> m_chat;
 
     std::optional<std::string> m_text;
-    // std::optional<std::vector<message_entity>> m_entities;
+    std::optional<std::vector<message_entity>> m_entities;
 };
 
 struct edited_message : message {
@@ -119,7 +132,8 @@ auto get_me(connection& conn) -> boost::asio::awaitable<anyhow::result<types::us
 ///
 /// @param offset
 ///   The first update returned will have an id greater than or equal to this value.
-auto get_updates(connection& conn, types::update_type type = types::update_type::all, u64 timeout_seconds = 300, u64 offset = 0) -> boost::asio::awaitable<anyhow::result<std::vector<types::update>>>;
+auto get_updates(connection& conn, types::update_type type = types::update_type::all, u64 timeout_seconds = 300, u64 offset = 0)
+  -> boost::asio::awaitable<anyhow::result<std::vector<types::update>>>;
 
 auto send_message(connection& conn, std::variant<i64, std::string_view> chat_id, std::string_view text) -> boost::asio::awaitable<anyhow::result<types::message>>;
 

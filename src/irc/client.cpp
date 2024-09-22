@@ -139,13 +139,14 @@ auto irc_client::message_handler(message_view const& message) -> awaitable<void>
                   payload.m_return_to_sender.push_back("target", is_private_message ? message.m_prefix_name.value_or("") : params[0]);
 
                   if (message.m_prefix_name && !m_bot->display_name(payload.m_sender_identifier)) {
-                      auto display_name = fmt::format("{} ({})", *message.m_prefix_name, m_config.m_server);
-                      m_bot->set_display_name(payload.m_sender_identifier, std::move(display_name));
+                      // auto display_name = fmt::format("{} ({})", *message.m_prefix_name, m_config.m_server);
+                      // m_bot->set_display_name(payload.m_sender_identifier, std::move(display_name));
+                      m_bot->set_display_name(payload.m_sender_identifier, std::string{*message.m_prefix_name});
                   }
               };
 
               auto internal_message = john::message{
-                .m_from = "",
+                .m_from = get_id(),
                 .m_to = "",
 
                 .m_serial = 0uz,
@@ -154,9 +155,8 @@ auto irc_client::message_handler(message_view const& message) -> awaitable<void>
                 .m_payload = {},
               };
 
-              if (content.starts_with("!s")) {
+              if (content.starts_with("!j")) {
                   auto payload = payloads::command{
-                    .m_thing_id = m_config.m_identifier,
                     .m_sender_identifier = {},
                     .m_return_to_sender = {},
                     .m_argv = john::make_argv(content.substr(2)),
@@ -165,7 +165,6 @@ auto irc_client::message_handler(message_view const& message) -> awaitable<void>
                   internal_message.m_payload = std::move(payload);
               } else {
                   auto payload = payloads::incoming_message{
-                    .m_thing_id = m_config.m_identifier,
                     .m_sender_identifier = {},
                     .m_return_to_sender = {},
                     .m_content = std::string{content},
@@ -202,6 +201,10 @@ auto irc_client::state_change(state_t new_state) -> awaitable<void> {
 
     const auto state_visitor = stf::multi_visitor{
       [&](state::connected& state) -> awaitable<void> {
+          if (m_config.m_password) {
+              co_await send_message(message::bare("PASS").with_param(*m_config.m_password));
+          }
+
           if (state.m_nick_try >= m_config.m_nicks.size()) {
               spdlog::error("ran out of nicks to try, oh well!");
               co_await state_change(state::failure_registration{});

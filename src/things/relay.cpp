@@ -11,6 +11,22 @@ namespace john::things {
 
 auto relay::worker(john::bot& bot) -> awaitable<result<void>> {
     m_bot = &bot;
+
+    co_await bot.queue_message(message{
+      .m_from = get_id(),
+      .m_to = "bot",
+
+      .m_serial = 0uz,
+      .m_reply_serial{},
+
+      .m_payload =
+        payloads::command_decl{
+          .m_command = "addmap",
+          .m_description = "adds a unidirectional relay mapping",
+          .m_min_level = user_level::op,
+        },
+    });
+
     co_return result<void>{};
 }
 
@@ -25,7 +41,7 @@ auto relay::handle(john::message const& msg) -> awaitable<result<void>> {
 
           for (auto const& to : TRYC(sqlite::query<std::string>(m_bot->get_db(), "select to_kv from relay_mappings where from_kv = ?", payload.m_return_to_sender.serialize()))) {
               co_await m_bot->queue_message(john::message{
-                .m_from = std::string{get_id()},
+                .m_from = get_id(),
                 .m_to = "",
 
                 .m_serial = 0,
@@ -58,6 +74,7 @@ auto relay::handle(john::message const& msg) -> awaitable<result<void>> {
                   .m_content = "addmap requires 3 arguments",
                 }
               );
+              co_return result<void>{};
           }
 
           auto res = sqlite::exec(m_bot->get_db(), "insert into relay_mappings (from_kv, to_kv) values (?, ?)", cmd.m_argv[1], cmd.m_argv[2]);

@@ -21,6 +21,7 @@ def main [...args: string] {
     let release_build = $args | contains "release";
 
     let run_tests = $args | contains "test";
+    let run_tsink = $args | contains "tsink";
     let do_cmake = $args | contains "cmake";
 
     let use_clang = $args | contains "clang";
@@ -44,7 +45,7 @@ def main [...args: string] {
         _ => { echo $"bad compiler selection: ($compiler_selection)"; exit 1; }
     };
 
-    let run_type = if $run_tests { "test" } else { "main" };
+    let run_type = if $run_tests { "test" } else if $run_tsink { "tsink" } else { "main" };
     echo $"run type: ($run_type)";
 
     let build_dir = $"build/($build_type)-($compiler_selection)";
@@ -80,6 +81,9 @@ def main [...args: string] {
             run-external $"../../($build_dir)/john_bot_test";
             cd ..;
         },
+        "tsink" => {
+            run-external $"($build_dir)/terminal_sink";
+        }
         _ => {
             echo "invalid executable name"
             return 1

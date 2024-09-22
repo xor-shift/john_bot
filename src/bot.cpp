@@ -1,5 +1,7 @@
 #include <bot.hpp>
 
+#include <sqlite/query.hpp>
+
 #include <stuff/core/visitor.hpp>
 
 #include <spdlog/spdlog.h>
@@ -99,8 +101,8 @@ auto bot::queue_message(message message) -> awaitable<usize> {
 
 auto bot::queue_a_reply(message const& reply_to, std::string_view from_id, message_payload payload) -> awaitable<void> {
     co_await queue_message(message{
-      .m_from = std::string{from_id},
-      .m_to = reply_to.m_from,
+      .m_from = from_id,
+      .m_to = std::string{reply_to.m_from},
 
       .m_serial = 0uz,
       .m_reply_serial = reply_to.m_serial,
@@ -132,10 +134,60 @@ auto bot::handle_message(message msg) -> awaitable<void> {
         co_return;
     };
 
+    if (auto it = m_things.find("logger"); it != m_things.end()) {
+        auto res = co_await it->second->handle(msg);
+        if (!res) {
+            spdlog::warn("error while relaying message to logger: {}", static_cast<error const&>(res.error()));
+        }
+    }
+
+    if (auto* command = std::get_if<payloads::command>(&msg.m_payload); command != nullptr && !command->m_argv.empty()) {
+        spdlog::trace("message is a command, going to check persmission");
+
+        const auto sender = command->m_sender_identifier.serialize();
+        auto res = sqlite::query<int>(*m_database, "select level from user_levels where user_kv = ?", sender);
+        if (!res) {
+            spdlog::error("sql error while querying user level for \"{}\": {}", sender, static_cast<error const&>(res.error()));
+            co_await queue_a_reply(
+              msg, "bot",
+              payloads::outgoing_message{
+                .m_target = command->m_return_to_sender,
+                .m_content = "an error has ocurred, check logs",
+              }
+            );
+            co_return;
+        }
+
+        const auto user_level = res->empty() ? 0 : res->front();
+
+        if (auto it = m_declared_commands.find(command->m_argv[0]); it == m_declared_commands.end()) {
+            co_await queue_a_reply(
+              msg, "bot",
+              payloads::outgoing_message{
+                .m_target = command->m_return_to_sender,
+                .m_content = "invalid command",
+              }
+            );
+            co_return;
+        } else if (user_level < static_cast<int>(it->second.m_min_level)) {
+            co_await queue_a_reply(
+              msg, "bot",
+              payloads::outgoing_message{
+                .m_target = command->m_return_to_sender,
+                .m_content = "insufficient permissions",
+              }
+            );
+            co_return;
+        }
+    }
+
     if (msg.m_to == "") {
         using operation_t = decltype(asio::co_spawn(m_executor, std::declval<awaitable<void>>()));
         auto workers = std::vector<operation_t>{};
         for (auto& [id, thing] : m_things) {
+            if (id == "logger") {
+                continue; // already informed the logger
+            }
             workers.push_back(asio::co_spawn(m_executor, wrapper(*thing, msg)));
         }
 
@@ -176,6 +228,19 @@ auto bot::handle_message_internal(message&& msg, [[maybe_unused]] Payload&& payl
 template<>
 auto bot::handle_message_internal(message&& msg, [[maybe_unused]] payloads::exit&& payload) -> awaitable<result<void>> {
     m_message_channel.close();
+    co_return result<void>{};
+}
+
+template<>
+auto bot::handle_message_internal(message&& msg, [[maybe_unused]] payloads::command_decl&& payload) -> awaitable<result<void>> {
+    auto it = m_declared_commands.find(payload.m_command);
+
+    if (it != m_declared_commands.end()) {
+        co_return _anyhow_fmt("command \"{}\" is already added", payload.m_command);
+    }
+
+    m_declared_commands.emplace_hint(it, payload.m_command, payload);
+
     co_return result<void>{};
 }
 
